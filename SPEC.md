@@ -9,11 +9,15 @@
 
 ## 1. Executive Summary
 
-Dental Scribe is an AI-powered clinical documentation tool designed for small dental practices. It replaces the manual chore of writing SOAP-format clinical notes after every patient encounter with a two-part workflow: the dentist captures a short voice recording on her phone immediately after a procedure, and later — between patients or at end of session — reviews a pre-filled, structured note on a web app and copies it into her Practice Management System (PMS, e.g. Dentrix Ascend).
+Dental Scribe is an AI-powered clinical documentation tool designed for small dental practices. It produces the **full clinical note** the dentist would otherwise type into her Practice Management System (PMS, e.g. Dentrix Ascend) — assembled from a combination of in-app picklist selections and voice dictation. The dentist creates a new note in the web app, optionally taps through structured fields for her template (cement type, restoration, provider, etc.) and/or dictates the per-encounter specifics, reviews the assembled note, and copies the result as one block into the PMS's free-text note field, bypassing the PMS's own picklist wizard.
 
-The system is deliberately architected to keep Protected Health Information (PHI) out of the AI pipeline. The dentist dictates clinical content only ("composite on tooth 14, MO surface, one carpule lidocaine with epi…"); patient identity is captured separately as a short text tag that is never sent to the speech-to-text or language model providers. This dramatically simplifies the HIPAA posture, reduces ongoing compliance burden, and unlocks the use of best-in-class general-purpose AI providers without requiring Business Associate Agreements at MVP stage.
+The output is structured throughout — every line is `Label: value(s)`, matching the format the dentist writes by hand today. Each field combines a picklist selection with an optional free-text qualifier on the same line (e.g. `Calculus: Heavy, more all lowers, Heavy AL`). There is no separate narrative paragraph; the assembled list of labeled fields *is* the note.
 
-The target operating cost is approximately **$20-36 per dentist per month** at typical clinical volume (15 patients per day, 5-10 minute recordings), making the product economically viable at any price point above $30/month per provider. The MVP is achievable in roughly **100-150 hours of focused engineering work** by a single competent developer.
+**MVP is web-only.** The dentist records, reviews, edits, and copies all from her workstation, using the browser microphone. A mobile PWA with the same capabilities (capture and review on the phone, with cross-device handoff via Firestore as the source of truth) is the immediate v1.1 priority once MVP is in pilot.
+
+The system is deliberately architected to keep Protected Health Information (PHI) out of the AI pipeline. The dentist dictates clinical content only ("cementation tooth 14 zirconia adjusted, prep was deep, mild post-op sensitivity"); patient identity is captured separately as a short text tag stored in an isolated subcollection that is never sent to the speech-to-text or language model providers. This dramatically simplifies the HIPAA posture, reduces ongoing compliance burden, and unlocks the use of best-in-class general-purpose AI providers without requiring Business Associate Agreements at MVP stage.
+
+The target operating cost is approximately **$15-30 per dentist per month** at typical clinical volume (15 patients per day, 3-5 minute recordings averaging across procedures). The MVP is achievable in roughly **100-150 hours of focused engineering work** by a single competent developer.
 
 ---
 
@@ -66,35 +70,35 @@ In MVP, Dr. Patel will likely fill both roles herself.
 
 ## 4. Product Overview
 
-### 4.1 The capture/compose split
+### 4.1 One web app for MVP; mobile PWA in v1.1
 
-The product is split into two surfaces that share a backend:
+**MVP is a single web app**, running in the dentist's workstation browser, that handles the full lifecycle: create a note, record audio (browser microphone), edit picklist selections and free-text qualifiers, review the assembled note, copy to clipboard, mark filed. There is no separate mobile capture surface in MVP.
 
-**Capture (mobile PWA):** runs on the clinician's phone. Optimized for one-tap operation, gloved hands, noisy operatory environment. Captures audio and a short text tag identifying the patient and procedure. Uploads to the backend. Does not display finished notes.
+**Mobile PWA is the immediate v1.1 priority.** Once the web flow is in pilot, we add a mobile PWA with the same capabilities (capture *and* review) and cross-device handoff: a note started on the phone can be finished on the workstation and vice versa. Firestore is the source of truth from the moment a note is created, so the mobile client is additive — no schema migration required, no device-pinned state.
 
-**Compose (web app):** runs on the workstation. Optimized for review and editing. Displays a list of pending drafts, the structured fields the AI filled in, the generated narrative, and the formatted final note. Provides a one-click "copy" button that places the final note text on the system clipboard, ready to paste into Dentrix Ascend (or any other PMS).
-
-The split is deliberate (see §15 for the decision rationale). Briefly: capture and compose have different ergonomic, hardware, and timing requirements that are awkward to satisfy in a single app.
+The original spec split into a "capture surface" and "compose surface" with asymmetric capabilities (phone records, web reviews). That split was rejected in favor of symmetric surfaces, because in practice the dentist may need to start a recording at her workstation between patients or pick up a phone-started note at her desk — work flows in both directions.
 
 ### 4.2 End-to-end user flow
 
-The canonical flow, from a composite restoration on tooth 14:
+The canonical flow, from a cementation appointment on tooth 14:
 
-1. **Pre-encounter setup (one-time).** Dr. Patel has configured ~15 templates covering the procedures she does regularly. Each template is a YAML file (or admin UI) listing field names, types, validation, and a format string for the final note text. This setup happens once during onboarding and is updated occasionally.
+1. **Pre-encounter setup (one-time).** Dr. Patel has configured ~10 templates covering the procedures she does regularly (cementation, periodic exam / prophy, composite restoration, crown prep, extraction, etc.). Each template defines: a list of fields (tooth, restoration type, cement type, provider, assistant, next visit, patient warnings, etc.), each with a picklist of options and/or a free-text qualifier slot; a format string that renders the fields into the dentist's exact note style; a dental keyword list for STT boosting; and 2-3 few-shot examples for the LLM. This setup happens once during onboarding and is updated occasionally.
 
-2. **During the encounter.** Dr. Patel completes the composite procedure on the patient. The patient is still in the chair or just stepping out.
+2. **During the encounter.** Dr. Patel completes the cementation. The patient is still in the chair or just stepping out.
 
-3. **Capture.** Dr. Patel takes her phone from her scrubs pocket. The PWA is already open (or launches from a lock-screen shortcut). She taps the template chip "Composite," optionally types a short tag ("Sarah J — #14"), taps the mic button, and dictates for ~60-90 seconds:
-   > "Composite on tooth 14, MO surface. Gave one carpule of lidocaine 2% with epi. Rubber dam isolation. Removed caries, bonded with Scotchbond Universal, placed Filtek in 2mm increments, cured 20 seconds each. Adjusted occlusion with articulating paper. Patient tolerated well."
-   She taps the mic button again to stop. The recording is queued. She moves to the next patient.
+3. **New Note.** Between patients, Dr. Patel opens the web app at her workstation, clicks **+ New Note**, picks a template ("Cementation"), and optionally types a short tag ("Sarah J — #14") for her own reference. The empty note now exists in her list with status `new`.
 
-4. **Background processing.** The phone uploads the audio blob to Cloud Storage. A Cloud Function triggers on upload, sends the audio to Deepgram Nova-3 Medical for transcription with custom dental keyword boosting, receives the transcript, then sends transcript + template schema + few-shot examples to Claude Sonnet 4 via the Anthropic API. Claude returns structured JSON with each template field filled in plus a generated narrative. The result is written to Firestore as a "ready" draft. Total processing time: typically 5-15 seconds.
+4. **Capture and/or fill.** She has two input channels, used together within one note:
+   - **Picklist.** Tap through the structured fields in the template (tooth: 14; restoration: zirconia crown; adjustment: adjusted and polished; cement: RelyX; provider: Dr. Parul Aggarwal; assistant: Veronica; next visit: 6 months prophy).
+   - **Voice.** Tap the mic button and dictate the specifics: *"prep was deep with previous IRM, mesial open contact addressed with flowable, mild post-op sensitivity advised may resolve in 2-3 weeks, discussed nightguard."* Tap stop. She can re-record (discard and start over) or augment (add more audio that appends to the transcript).
 
-5. **Review (between patients or at lunch).** Dr. Patel walks to a workstation, opens the web app. She sees a list of pending drafts from the day. She clicks the composite draft. The review panel shows each field — tooth number, surfaces, anesthesia, materials, etc. — with confidence indicators (high / inferred / missing). The shade field shows "A2 (inferred — not stated)" in yellow. She corrects it to A1, glances over the narrative, clicks "Copy Note."
+5. **Background processing.** The audio blob uploads to Cloud Storage. A Cloud Function triggers, sends the audio to Deepgram Nova-3 Medical for transcription with the template's dental keyword list, receives the transcript, then sends transcript + template schema + few-shot examples + the dentist's existing picklist selections (if any) to Claude Sonnet 4.6 via the Anthropic API. Claude returns structured JSON: picklist values for any fields the dentist hasn't already set, plus free-text qualifiers for fields that warrant them. The result merges into the note's field values. Total processing time: typically 5-15 seconds.
 
-6. **Paste into PMS.** She switches to her Dentrix Ascend browser tab (already open to the patient's chart), clicks in the Clinical Notes field, presses Ctrl+V. The fully-formatted note appears in the field. She saves the chart entry as she normally would.
+6. **Review.** The web app shows the assembled note in real-time: each field as a row with its picklist selection (editable dropdown) and free-text qualifier (editable text). Below, a live preview of the final note text as it will appear when pasted. Fields where the AI's confidence is low (or where it inferred from context rather than explicit statement) are flagged visually. Dr. Patel skims, corrects anything wrong (changes restoration shade, adjusts a qualifier), and clicks **Copy Note**.
 
-7. **Mark filed.** She clicks "Mark Filed" in the web app. The draft, transcript, and any remaining audio data are deleted from the backend.
+7. **Paste into PMS.** She switches to her Dentrix Ascend browser tab (already open to the patient's chart), clicks in the Clinical Notes field, presses Ctrl+V. The fully-formatted note appears as one block. She saves the chart entry as she normally would.
+
+8. **Mark filed.** She clicks **Mark Filed** in the web app. The note, audio segments (if any remain), transcript, patient tag, and field values are deleted from the backend. A content-free record is written to the audit log for usage analytics.
 
 ### 4.3 Key product properties
 
@@ -105,6 +109,8 @@ The dentist always reviews and approves notes before they enter the PMS. The sys
 PHI is kept out of the AI pipeline. The dentist dictates clinical content only. Patient identifiers live in a separately-classified tag field that never reaches the STT or LLM providers. This is enforced by the data model and backend code, not by user discipline alone (although user discipline is the first line of defense).
 
 The system is PMS-agnostic. It produces final note text and places it on the clipboard. Whatever the dentist does with that text — paste into Dentrix, paste into Open Dental, paste into a Google Doc — is outside the product's concern.
+
+The output matches the dentist's existing note style exactly. The format string is per-template and produces the literal `Label: value(s)` lines she would have typed herself, including her clinical shorthand (WNL, BWs, PAs, USS, OHI, etc.). We are not introducing a new note format; we are accelerating the one she already uses.
 
 ---
 
@@ -127,71 +133,82 @@ Stories deferred from MVP are listed in §17.
 
 ## 6. Functional Requirements
 
-### 6.1 Mobile capture (PWA)
+### 6.1 Web app (MVP — single surface)
 
-The mobile capture surface must:
+The web app must support the full note lifecycle on the dentist's workstation.
 
-Allow the clinician to record an audio clip from the device microphone using the browser's MediaRecorder API. Audio is encoded as WebM/Opus on Chrome/Edge or MP4/AAC on Safari, at 16 kHz mono. Browser-native echo cancellation, noise suppression, and automatic gain control are enabled.
+**Authentication.** Firebase Authentication, email + password to start. MFA (TOTP via Firebase Auth) required before onboarding any external customer.
 
-Allow the clinician to optionally tag the recording with a short free-text label (e.g. "Sarah J — #14"). The tag is stored locally on the device by default and synchronized to the web app on the same authenticated session. The tag is never transmitted to STT or LLM providers.
+**New Note creation.** A `+ New Note` action creates an empty note: the dentist picks a template from her list (~10 templates expected), optionally types a short patient tag for her own reference, and the note enters her list with status `new`. The tag is stored in the isolated `patient_tags` subcollection (PHI; never transmitted to STT/LLM).
 
-Allow the clinician to optionally choose a template before recording, presented as a row of recent-template chips ("Composite," "Hygiene Recall," "Crown Prep") plus a search affordance for the full list. If no template is chosen, the backend defaults to a "general" template or attempts auto-detection (deferred to v2).
+**Recording.** Browser microphone via the MediaRecorder API. Audio encoded as WebM/Opus on Chrome/Edge or MP4/AAC on Safari, at 16 kHz mono. Browser-native echo cancellation, noise suppression, and automatic gain control enabled. The dentist can:
+- **Record** a fresh audio segment on a new note.
+- **Augment** an existing note with another audio segment — the new transcript is appended to the existing transcript, and the LLM re-fills the template fields from the combined transcript.
+- **Re-record (clean)** an existing note — discards the current audio segments and transcript, keeps the note shell and any picklist selections already entered.
 
-Queue recordings locally (in IndexedDB) if upload fails or the device is offline. Retry upload when connectivity returns. Indicate queue status visibly.
+**Picklist editing.** Every template field with a defined option set renders as a dropdown/multi-select control. The dentist can fill picklist values before, during, or after recording. Picklist selections combine with voice-derived data into the same field-value structure.
 
-Show a status indicator for each recording: queued, uploading, transcribing, drafting, ready. The phone does not display draft contents — reviewing and editing happens on the web app.
+**Free-text qualifier editing.** Each field can also carry a free-text qualifier ("Heavy" + "more all lowers, Heavy AL"). The qualifier is editable inline as a text input next to (or below) the picklist selection.
 
-Authenticate the clinician via Firebase Authentication (email + password to start; magic link or MFA before any external customer).
+**Live preview of the assembled note.** As field values change (picklist picks, qualifier text, AI updates), the rendered final note text updates live. This is what the dentist will copy.
 
-### 6.2 Web compose
+**Drafts list.** Organized by date, shows template name, patient tag (joined from `patient_tags`), status, and age. Status states are visible: `new`, `recording`, `transcribing`, `drafting`, `ready`, `edited`, `filed`. Notes are sorted by recency by default; filterable by template and status.
 
-The web compose surface must:
+**Review.** Opening a note shows all template fields with their current values, the assembled note preview, and (collapsible) the transcript and a list of audio segment timestamps. Fields where the AI inferred (rather than explicitly extracted) are flagged with a visual marker so the dentist's eye is drawn to anything not high-confidence.
 
-Authenticate the clinician (same Firebase Auth backend).
+**Copy Note.** A button that places the assembled final note text on the system clipboard. After a successful copy, the dentist can paste into the PMS's free-text note field.
 
-Display a list of pending and recently-filed drafts, organized by date, with patient tag (joined from local sync) and template name visible. Drafts in "ready" state are clearly distinguished from drafts still processing.
+**Mark Filed.** Triggers deletion of the note, its audio segments (if any remain), its transcript, its patient tag, and its field values. Writes a content-free audit record to `/audit/{practice_id}/{event_id}` for usage analytics.
 
-Open a review panel for each draft showing all extracted fields with confidence indicators (high / inferred / missing), the AI-generated narrative paragraph, and the assembled final note as it will appear when pasted. The transcript should be available alongside (collapsible) so the clinician can verify any field against the source.
+**Template management (admin role only).** A minimal form-based editor for creating and editing templates: field definitions with option sets, format string, dental keyword list for STT, few-shot examples. Visual editor is deferred to v2.
 
-Allow inline editing of any field. Edits to fields automatically update the assembled final note. Edits to the narrative are kept as the clinician's authored version.
+### 6.2 Mobile PWA (v1.1 — same capabilities as web, plus chairside ergonomics)
 
-Provide a "Copy Note" button that places the final formatted note text on the system clipboard.
+Deferred from MVP; documented here so the data model anticipates it.
 
-Provide a "Mark Filed" action that triggers deletion of the audio (if not already deleted), transcript, and draft from the backend. (Configurable retention is a v2 feature — see §17.)
+The mobile PWA, when added, must support the same lifecycle as the web app (create / record / fill picklist / edit qualifiers / review / copy / mark filed). It additionally optimizes for chairside capture: large mic button suitable for gloved hands, one-tap template selection, offline recording queue (IndexedDB) for operatories with bad wifi, status indicators for in-flight uploads.
 
-Provide a template editor (admin role only) allowing creation and editing of templates: field definitions, types, validation rules, format strings, and few-shot examples.
+Cross-device handoff is core: a note started on the phone appears immediately in the web app via Firestore listeners, and vice versa. Firestore is the source of truth from the moment of `+ New Note`; no device-pinned state.
 
 ### 6.3 Backend pipeline
 
 The backend must:
 
-Accept authenticated audio uploads from the mobile app, store them temporarily in Cloud Storage with a UUID-based path.
+Accept authenticated audio uploads from any authorized client (web app in MVP; mobile PWA in v1.1), store them temporarily in Cloud Storage at a UUID-keyed path.
 
-Trigger a Cloud Function on each new upload that orchestrates the processing pipeline: speech-to-text via Deepgram Nova-3 Medical, structured extraction via Claude Sonnet 4, persistence of the resulting draft to Firestore.
+Trigger a Cloud Function on each new upload that orchestrates the processing pipeline: speech-to-text via Deepgram Nova-3 Medical, structured field-fill via Claude Sonnet 4.6, merge of the LLM result into the note's field-value map in Firestore.
 
-Delete audio blobs immediately after successful transcription (with a 24-hour lifecycle rule as a safety net for failed deletions).
+Append the new transcript to the note's existing transcript (for augment flows). The note carries a single combined transcript that is the source of truth; individual audio segments are deleted after successful transcription.
 
-Apply per-template prompt engineering: each template has its own system prompt, JSON schema for tool-use, and few-shot examples. The backend selects the correct prompt based on the template chosen at capture time (or the auto-detection result, in v2).
+Delete audio blobs immediately after successful transcription, with a 24-hour Cloud Storage lifecycle rule as a safety net.
 
-Enforce strict JSON output from the LLM using Anthropic's tool-use feature. Schema mismatches result in a retry or a flagged draft, not a malformed entry.
+Apply per-template prompt engineering: each template has its own system prompt, tool-use JSON schema, dental keyword list (for STT boosting), and 2-3 few-shot examples. The backend selects the correct prompt based on the template chosen at note creation.
+
+Pass any picklist values the dentist has already set as context to the LLM, so the model fills the remaining fields without overwriting her explicit choices. The LLM's output for fields the dentist has already filled is treated as a suggestion (visible in review) but does not silently overwrite.
+
+Enforce strict JSON output from the LLM using Anthropic's tool-use feature. Schema mismatches result in a single retry with a corrective prompt; if still failing, the note enters `error` status with the error message visible to the dentist for retry.
 
 Log all LLM calls and STT calls (without PHI) for cost monitoring, accuracy benchmarking, and debugging.
 
-Surface processing errors to the clinician via draft state ("error — see details"), with retry affordance.
+Surface processing errors to the dentist via note status (`error` plus a human-readable error message), with retry affordance.
 
 ### 6.4 Templates
 
 Templates are first-class entities. The template system must support:
 
-**Field types:** short text, long text (narrative), single-choice (with defined options), multi-choice (with defined options), number, boolean, date, derived/auto-filled (e.g. today's date).
+**Field types.** Each field has both a *structured part* (single-select picklist, multi-select picklist, number, boolean, date, derived, or none) and an optional *free-text qualifier slot* (a string that the dentist or the LLM can populate to add specifics on the same line as the picklist value). A field with no picklist part is pure free-text; a field with no qualifier slot is pure picklist. Most fields in real templates have both.
 
-**Validation:** required vs. optional, allowed value ranges for numbers, allowed value sets for choices.
+**Validation.** Required vs. optional per field, allowed value sets for picklist parts, allowed value ranges for numbers.
 
-**Format strings:** each template includes a format string with `{field_name}` placeholders that produces the final note text by substitution. Format strings can include conditional fragments (e.g. show occlusal adjustment line only if occlusal_adjusted is true).
+**Format strings.** Each template includes a format string with `{field_name}` placeholders that produces the final note text by substitution. Substitution combines the picklist part and the qualifier into a single line (e.g. picklist `Heavy` + qualifier `more all lowers, Heavy AL` renders as `Heavy, more all lowers, Heavy AL`). Format strings support conditional fragments (show a line only if a field is set) and filters (uppercase, lowercase, join arrays). The format must produce the dentist's exact note style — same labels, same clinical shorthand, same line breaks.
 
-**Few-shot examples:** each template carries 2-3 example (transcript, expected JSON) pairs used in the LLM prompt to improve accuracy.
+**Few-shot examples.** Each template carries 2-3 example pairs: `(transcript, expected_field_values)`. Used in the LLM prompt to improve accuracy on the template's vocabulary.
 
-**Versioning:** edits to a template create a new version. Drafts retain a reference to the template version used to create them, for audit and reproducibility. The current version is what's used for new captures.
+**Dental keyword list.** Per-template list of terms to boost during STT (e.g. `["Filtek:2", "Scotchbond:2", "MOD:2", "USS:1.5", "OHI:1.5", "WNL:1.5", ...]`).
+
+**Versioning.** Edits to a template create a new version. Notes retain a reference to the template version used to fill them, for audit and reproducibility. The current version is what's used for new notes.
+
+**Practice-scoped staff lists.** Provider and assistant fields draw their options from practice-level settings (`/practices/{pid}/providers`, `/practices/{pid}/assistants`), not from the template itself. This keeps staff lists in one place when they change; templates reference them by name.
 
 ---
 
@@ -305,7 +322,7 @@ The tech stack decision (detailed in §15) lands on Firebase because: realtime s
 
 ### 9.1 Firestore collections
 
-All documents are scoped to a clinician unless otherwise noted. Security rules enforce that a clinician can only read/write documents belonging to her.
+All clinician-scoped documents live under `/clinicians/{clinician_id}/...`. Practice-scoped documents (templates, staff lists) live under `/practices/{practice_id}/...`. Security rules enforce that a clinician can only read/write her own documents and the templates / staff lists for her practice.
 
 **`/clinicians/{clinician_id}`**
 The clinician's profile and settings.
@@ -315,173 +332,251 @@ The clinician's profile and settings.
   display_name: string,
   role: "clinician" | "admin",
   practice_id: string,
-  default_template: string | null,
+  default_template_id: string | null,
   created_at: timestamp,
   // No PHI in this document.
 }
 ```
 
-**`/clinicians/{clinician_id}/recordings/{recording_id}`**
-The recording metadata. Audio is in Cloud Storage; transcript is here after processing.
+**`/clinicians/{clinician_id}/notes/{note_id}`**
+The unified note document. Replaces the earlier split of `recordings/` + `drafts/`. One doc covers the full lifecycle from `+ New Note` to `filed`.
 ```
 {
-  recording_id: string (uuid v4),
+  note_id: string (uuid v4),               // Random v4. Never derived from PHI.
   template_id: string,
-  template_version: string,
-  date_iso: string (day-level: "2026-05-19"),  // No precise time on backend.
-  status: "uploading" | "transcribed" | "drafting" | "ready" | "filed" | "error",
-  transcript: string | null,
-  error: string | null,
-  created_at: timestamp,
-  // No PHI in this document. No name, no precise time.
-}
-```
+  template_version: number,
+  date_iso: string,                        // Day-level only, e.g. "2026-05-19".
+                                           // Precise timestamps live in patient_tags only.
+  status: "new"                            // Created via "+ New Note", no audio yet.
+        | "recording"                      // An audio segment is uploading.
+        | "transcribing"                   // STT in flight on the latest segment.
+        | "drafting"                       // LLM filling fields from the transcript.
+        | "ready"                          // AI fill complete, awaiting dentist review.
+        | "edited"                         // Dentist has made edits since the last AI fill.
+        | "filed"                          // Terminal (note doc is then hard-deleted).
+        | "error",                         // Pipeline error; see error_message.
 
-**`/clinicians/{clinician_id}/drafts/{recording_id}`**
-The AI-filled draft. Linked to its recording by shared UUID.
-```
-{
-  recording_id: string,
-  template_id: string,
-  template_version: string,
-  fields: {
+  // Transcript accumulates across augment recordings.
+  transcript: string,                      // Empty string when no audio yet. Appended on each segment.
+
+  // Field values. Keyed by field name in the template.
+  // Each value combines an optional picklist part and an optional free-text qualifier.
+  field_values: {
     [field_name]: {
-      value: any,
-      confidence: "high" | "inferred" | "missing",
-      edited_by_user: boolean
+      picklist: string | string[] | number | boolean | null,
+      qualifier: string | null,            // Free-text tail rendered on the same line.
+      ai_confidence: "high" | "inferred" | "missing" | null,
+      source: "ai" | "user" | "ai+user"    // Provenance. "user" never gets overwritten by AI.
     }
   },
-  narrative: string,
-  final_note_text: string,  // The assembled output.
-  status: "ready" | "edited" | "filed",
-  created_at: timestamp,
-  filed_at: timestamp | null,
-  // No PHI in this document.
+
+  // Live preview, rendered by applying the template's format string to field_values.
+  // Stored so the web app can show it without re-rendering client-side, and so audit
+  // can capture what was on the clipboard at file time.
+  final_note_text: string,
+
+  error_message: string | null,
+  created_at: timestamp,                   // Processing timestamp, NOT appointment time.
+  updated_at: timestamp,
+  // No PHI in this document. No patient name, no appointment time.
 }
 ```
 
-**`/clinicians/{clinician_id}/patient_tags/{recording_id}`**
-The PHI tag, isolated in its own subcollection with stricter security rules. Stored encrypted-at-rest by Firestore. Deleted on file-and-mark-filed.
+**`/clinicians/{clinician_id}/notes/{note_id}/segments/{segment_id}`**
+An audio segment within a note. Multiple segments exist when the dentist augments. Each segment is short-lived: the audio blob is in Cloud Storage and is deleted after STT; this doc records segment metadata and the per-segment transcript chunk for traceability.
 ```
 {
-  recording_id: string,
-  tag: string,                  // "Sarah J — #14 — 9:15"
-  precise_time: timestamp,      // Real timestamp; never replicated elsewhere.
+  segment_id: string (uuid v4),
+  sequence: number,                        // 1, 2, 3... in order of recording.
+  storage_path: string | null,             // Cleared after audio deletion.
+  transcript_chunk: string,                // STT output for this segment.
+  duration_ms: number,
+  status: "uploading" | "transcribing" | "done" | "error",
+  error_message: string | null,
   created_at: timestamp,
-  // THIS DOCUMENT CONTAINS PHI. Treat with special care.
-  // Never logged. Never sent to LLM. Never sent to STT.
 }
 ```
 
-**`/clinicians/{clinician_id}/templates/{template_id}`** (or `/practices/{practice_id}/templates/{template_id}` for shared templates)
-A template definition.
+**`/clinicians/{clinician_id}/patient_tags/{note_id}`**
+The PHI tag, isolated in its own subcollection with stricter security rules (no list permission). Stored encrypted-at-rest by Firestore. Deleted on Mark Filed.
+```
+{
+  note_id: string,
+  tag: string,                             // "Sarah J — #14 — 9:15"
+  precise_time: timestamp | null,          // Optional. Never replicated elsewhere.
+  created_at: timestamp,
+  // THIS DOCUMENT CONTAINS PHI. Treat with special care.
+  // Never logged. Never sent to LLM. Never sent to STT. Never read by Cloud Functions.
+}
+```
+
+**`/practices/{practice_id}/templates/{template_id}`**
+A template definition. Practice-scoped, shared across all clinicians in the practice.
 ```
 {
   template_id: string,
-  name: string,                 // "Composite Restoration"
+  name: string,                            // "Cementation", "Periodic Exam / Adult Prophy"
   version: number,
   fields: [
     {
-      name: string,
-      type: "short_text" | "long_text" | "single_choice" | "multi_choice" | "number" | "boolean" | "date" | "derived",
+      name: string,                        // e.g. "calculus"
+      label: string,                       // e.g. "Calculus" (rendered in note)
       required: boolean,
-      options: string[] | null,  // For choice types
-      min: number | null,        // For number type
-      max: number | null,
-      default: any | null
+      picklist: {
+        kind: "single" | "multi" | null,   // null = no picklist part on this field
+        options: string[] | null,          // For single/multi picklists.
+        source: "inline" | "providers" | "assistants" | null,
+                                           // "providers"/"assistants" pull options from
+                                           // /practices/{pid}/{providers,assistants}.
+        default: any | null
+      } | null,
+      qualifier: {
+        allowed: boolean,                  // If true, this field carries a free-text tail.
+        placeholder: string | null         // Hint shown in the qualifier text input.
+      } | null,
+      numeric: { min: number, max: number } | null,
+                                           // Set when the field is a number (e.g. tooth_number).
     }
   ],
-  format_string: string,         // "Composite restoration on tooth {tooth_number}, surfaces {surfaces}..."
+  format_string: string,                   // See §11.4 for grammar.
   few_shot_examples: [
-    { transcript: string, expected_output: object }
+    { transcript: string, expected_field_values: object }
   ],
-  keywords: string[],            // For Deepgram keyword boost: ["Filtek:2", "Scotchbond:2", ...]
+  keywords: string[],                      // Deepgram boost list, e.g. ["WNL:1.5", "USS:1.5", ...]
   system_prompt_override: string | null,
   created_at: timestamp,
   updated_at: timestamp,
 }
 ```
 
+Older versions of a template are retained at `/practices/{practice_id}/templates/{template_id}/versions/{version}` so notes can re-render against the version that created them.
+
+**`/practices/{practice_id}/providers/{provider_id}` and `/practices/{practice_id}/assistants/{assistant_id}`**
+Practice-level staff lists. Providers and assistants pulled by template fields with `picklist.source: "providers" | "assistants"`.
+```
+{
+  display_name: string,                    // "Dr. Parul Aggarwal, DDS" or "Veronica"
+  credential: string | null,               // "DDS", "RDH", license number, etc.
+  active: boolean,
+  created_at: timestamp,
+}
+```
+
+**`/audit/{practice_id}/{event_id}`**
+Content-free audit records for usage analytics. No PHI, no field values, no transcript.
+```
+{
+  event_type: "note_created" | "note_filed" | "template_edited" | "signin",
+  clinician_id: string,
+  note_id: string | null,
+  template_id: string | null,
+  date_iso: string,                        // Day-level.
+  created_at: timestamp,
+}
+```
+Retained for 90 days.
+
 ### 9.2 Cloud Storage layout
 
 ```
-gs://<project>-recordings/
-  recordings/
-    {recording_id}.webm   ← deleted within seconds of successful STT; 24h lifecycle rule as safety net
+gs://<project>-audio/
+  notes/{note_id}/segments/{segment_id}    ← deleted within seconds of successful STT;
+                                              24h lifecycle rule as safety net.
 ```
 
-That's the entire Storage footprint. No long-lived audio.
+That's the entire Storage footprint. No long-lived audio. Object metadata: `{ clinician_id, note_id, segment_id }`; Storage Security Rules enforce that `clinician_id` in metadata equals the authenticated user.
 
 ### 9.3 PHI classification
 
 | Entity | Classification | Where it lives | Sent to STT/LLM? |
 |---|---|---|---|
-| Audio recording | De-identified clinical | Cloud Storage (ephemeral) | Sent to STT only |
-| Transcript | De-identified clinical | Firestore `/recordings/{uuid}` | Sent to LLM |
-| Filled draft | De-identified clinical | Firestore `/drafts/{uuid}` | n/a (output) |
-| Patient tag | PHI | Firestore `/patient_tags/{uuid}` | **Never** |
-| Precise timestamp | PHI-adjacent (identifying with schedule) | Firestore `/patient_tags/{uuid}` only | **Never** |
-| Clinician profile | Workforce data | Firestore `/clinicians/{uuid}` | n/a |
-| Template | Configuration | Firestore `/templates/{uuid}` | Sent to LLM as part of prompt |
+| Audio segment | De-identified clinical | Cloud Storage (ephemeral, seconds) | Sent to STT only |
+| Per-segment transcript chunk | De-identified clinical | Firestore `notes/{nid}/segments/{sid}` | n/a (input to next stage) |
+| Combined transcript | De-identified clinical | Firestore `notes/{nid}.transcript` | Sent to LLM |
+| Field values | De-identified clinical | Firestore `notes/{nid}.field_values` | n/a (output of LLM, edited by user) |
+| Assembled final note text | De-identified clinical | Firestore `notes/{nid}.final_note_text` | n/a (output) |
+| Patient tag | **PHI** | Firestore `patient_tags/{nid}` | **Never** |
+| Precise timestamp | PHI-adjacent (identifying with schedule) | Firestore `patient_tags/{nid}` only | **Never** |
+| Clinician profile | Workforce data | Firestore `clinicians/{cid}` | n/a |
+| Template definition | Configuration | Firestore `practices/{pid}/templates/{tid}` | Sent to LLM as prompt |
+| Staff lists (providers, assistants) | Workforce data | Firestore `practices/{pid}/{providers,assistants}` | Sent to LLM as picklist options |
 
 The PHI surface area in this system is exactly one subcollection (`patient_tags`). That's the entire footprint. This is the single most important architectural property of the design.
+
+### 9.4 State machine
+
+A note moves through statuses in roughly this order. Not every transition is required — a note that's filled entirely by picklist (no voice) skips the audio/STT/drafting states.
+
+```
++ New Note          →  new
+record start        →  recording
+audio uploaded      →  transcribing
+STT complete        →  drafting
+LLM fill complete   →  ready
+dentist edits       →  edited        (loops back to ready on next AI fill via augment)
+dentist Mark Filed  →  filed         (terminal; note doc hard-deleted, audit row written)
+pipeline failure    →  error         (recoverable: retry returns the note to its prior status)
+```
+
+Augment recording on a `ready` note moves it back to `recording` → `transcribing` → `drafting` → `ready`; previously-set field values from the user are preserved (per `source: "user"` provenance).
+
+A scheduled Cloud Function deletes notes (and their segments, transcripts, field values, and patient tags) 30 days after creation if they were never explicitly filed.
 
 ---
 
 ## 10. Key Components
 
-### 10.1 Mobile capture PWA
+### 10.1 Web app (MVP)
 
-**Technology:** Progressive Web App, built with React or Svelte (preference for whichever the developer is fastest in). Vite for build tooling. Hosted on Firebase Hosting.
+**Technology:** React + Vite + TypeScript. Hosted on Firebase Hosting.
 
 **Key APIs used:**
-- `MediaRecorder` for audio capture with `getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, sampleRate: 16000 } })`.
-- `IndexedDB` (via a wrapper like `idb`) for local recording queue.
-- Firebase JS SDK: Auth, Firestore (offline-enabled), Storage.
+- `MediaRecorder` for browser-microphone audio capture with `getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, sampleRate: 16000 } })`.
+- Firebase JS SDK: Auth, Firestore (real-time listeners), Storage.
+- Clipboard API (`navigator.clipboard.writeText`) for Copy Note.
 
 **Screens (MVP):**
-1. Sign-in screen.
-2. Main capture screen: tag field, template chip row, large mic button, status row showing pending uploads.
-3. Pending queue detail (for retrying failed uploads).
-4. Settings (sign out, manage templates link to web app).
+1. **Sign-in.**
+2. **Notes list.** Organized by date; columns: template name, patient tag (joined from `patient_tags`), status, age. Filter by status and template. `+ New Note` button.
+3. **Note workspace** (the main screen). Three panes:
+   - Header: template name, patient tag (editable inline), status, age.
+   - Left/center: field list. Each field rendered as a row with (a) a picklist control (dropdown or multi-select) if the template defines one, and (b) a free-text qualifier input if the template allows one. Picklist source can be inline options, the practice's `providers` list, or the practice's `assistants` list. Fields the AI inferred are marked.
+   - Right: live preview of the assembled `final_note_text` exactly as it will be pasted. Below the preview: Copy Note, Mark Filed, and a collapsible Transcript & Audio segments panel.
+   - Top right: Record / Stop button, with sub-actions for Re-record (clean) and Augment.
+4. **Template editor (admin only).** List of templates; form-based create/edit with field builder, format-string editor, keyword list editor, few-shot example editor. Versioned — saves bump `version` and archive the prior version under `versions/`.
+5. **Settings.** Practice info, providers list, assistants list (admin-editable), user management, sign out.
 
-The mobile PWA deliberately does not show finished notes. This keeps the surface focused and avoids accidentally caching PHI-adjacent content on shared devices.
+### 10.2 Mobile PWA (v1.1)
 
-### 10.2 Web compose app
+Deferred from MVP. When added: same lifecycle as the web app, same Firebase backend, same Firestore source of truth. Adds an `IndexedDB`-backed upload queue (via the `idb` library) for offline operatories, a touch-optimized recording UI with large mic button, and template selection optimized for one-tap operation. The data model in §9 already accommodates this with no schema changes; the mobile client is purely additive.
 
-**Technology:** React (Next.js) or SvelteKit. Hosted on Firebase Hosting. Same Firebase Auth and Firestore SDK as mobile.
+### 10.3 Cloud Function: processSegment
 
-**Screens (MVP):**
-1. Sign-in screen.
-2. Drafts list: organized by date, showing tag, template name, status, age. Filterable.
-3. Review panel: opens for a single draft. Field-by-field view with confidence indicators, inline editing, transcript side panel, narrative editor, final note preview, copy button, mark-filed button.
-4. Template editor (admin only): list of templates, create/edit form with field builder, format string editor, few-shot example editor.
-5. Settings: user management (admin), template export/import, sign out.
-
-### 10.3 Cloud Function: processRecording
-
-**Trigger:** `onObjectFinalized` on Cloud Storage path `recordings/*`.
+**Trigger:** `onObjectFinalized` on Cloud Storage path `notes/*/segments/*`.
 
 **Runtime:** Node.js 20 on Cloud Functions 2nd gen. Memory: 512 MB. Timeout: 120 seconds. Min instances: 0 (cold starts are tolerable for this async pipeline; bump to 1 if startup latency becomes a complaint).
 
 **Steps:**
-1. Parse `recording_id` and `clinician_id` from object metadata.
-2. Read template document from Firestore.
-3. Download audio blob from Cloud Storage into memory.
-4. Call Deepgram `transcribeFile` with `model: "nova-3-medical"`, `smart_format: true`, `punctuate: true`, `keywords: [...template.keywords]`.
-5. Write transcript to `/clinicians/{cid}/recordings/{rid}` with `status: "transcribed"`.
-6. Delete audio blob from Storage.
-7. Build LLM prompt: system prompt with schema, user message with transcript and template instructions, few-shot examples in conversation history.
-8. Call Anthropic API with Claude Sonnet 4, tool-use enabled with the template's field schema as the tool input schema.
-9. Parse the tool call result. Validate against schema.
-10. Render `final_note_text` by substituting fields into `format_string`.
-11. Write draft to `/clinicians/{cid}/drafts/{rid}` with `status: "ready"`.
+1. Parse `clinician_id`, `note_id`, `segment_id` from object metadata. Verify metadata `clinician_id` matches the path.
+2. **Idempotency:** if the segment doc already has `status: "done"`, return immediately. If `status` is `"transcribing"` and the started-at timestamp is fresh (< 60s), return; if stale, proceed.
+3. Read the parent note doc; read the template doc (by `template_id` + `template_version`) from `/practices/{pid}/templates/{tid}/versions/{v}` (or current version doc if v is current).
+4. Download audio blob from Cloud Storage into memory.
+5. Call Deepgram `transcribeFile` with `model: "nova-3-medical"`, `smart_format: true`, `punctuate: true`, `keywords: [...template.keywords]`.
+6. Write the per-segment transcript chunk to `notes/{nid}/segments/{sid}.transcript_chunk` with `status: "done"`. Append the chunk to the parent note's `transcript`.
+7. Delete the audio blob from Cloud Storage. Clear `storage_path` on the segment doc.
+8. Set the parent note's `status: "drafting"`.
+9. Build the LLM prompt: system prompt with the template's schema, prior user-set field values (so the model knows what *not* to overwrite), few-shot examples, and the full combined transcript.
+10. Call Anthropic API with Claude Sonnet 4.6, tool-use enabled with the template's field-value schema. Prompt caching markers on the system prompt and few-shot examples.
+11. Parse the tool call result. Validate. On schema violation, retry once with a corrective prompt.
+12. Merge the LLM's output into the note's `field_values`. For each field the AI returns: if the existing value has `source: "user"`, do not overwrite; otherwise, set to AI value with `source: "ai"` and the appropriate `ai_confidence`.
+13. Render `final_note_text` by applying the template's format string to the merged `field_values`.
+14. Update the note doc with the merged field values, the new `final_note_text`, and `status: "ready"`.
 
-Errors at any step write `status: "error"` with a human-readable error message to the recording doc, surfaced in the UI for clinician-initiated retry.
+Errors at any step write `status: "error"` with a human-readable `error_message` to the note doc, surfaced in the UI for clinician-initiated retry. Errors do not advance the status machine past the failing stage.
 
 ### 10.4 STT integration (Deepgram)
 
-**Provider:** Deepgram Nova-3 Medical, batch mode.
+**Provider:** Deepgram Nova-3 Medical, batch (prerecorded) mode.
 
 **API key storage:** Firebase Secret Manager (`firebase functions:secrets:set DEEPGRAM_API_KEY`).
 
@@ -500,37 +595,33 @@ Errors at any step write `status: "error"` with a human-readable error message t
 
 ### 10.5 LLM integration (Anthropic Claude)
 
-**Provider:** Anthropic API, Claude Sonnet 4 as workhorse, Claude Opus 4.7 as escalation for complex templates (configurable per-template; not used in MVP).
+**Provider:** Anthropic API. Claude Sonnet 4.6 as workhorse. Claude Opus 4.7 as escalation for complex templates (configurable per-template; not used in MVP). Pin the exact model ID at implementation time; verify the current Sonnet via Anthropic docs.
 
 **API key storage:** Firebase Secret Manager (`ANTHROPIC_API_KEY`).
 
 **SDK:** `@anthropic-ai/sdk` (Node).
 
 **Prompt structure (per template):**
-- System prompt: role definition, schema definition, confidence-marking rules, "do not invent" guardrails.
-- Tool definition: JSON schema matching the template's field list. This forces structured output.
-- Few-shot examples: 2-3 `(transcript, tool_use_input)` pairs in conversation history.
-- User message: the actual transcript to process.
+- System prompt: role definition, schema description, "do not invent" guardrails, confidence-marking rules. Cached.
+- Tool definition: JSON schema for the template's field values, where each field returns `{ picklist?, qualifier?, confidence }`. Cached.
+- Few-shot examples: 2-3 `(transcript, expected_field_values)` pairs as prior `tool_use` turns. Cached.
+- User message: the full combined transcript, plus any field values the dentist has already explicitly set (so the model can fill the rest without contradicting her).
 
-**Prompt caching:** enable Anthropic's prompt caching on the system prompt and few-shot examples. These are stable per template and benefit hugely from caching. Reduces LLM cost by ~30%.
+**Prompt caching:** enable Anthropic's prompt caching on the system prompt + tool schema + few-shot examples. These are stable per template and benefit hugely from caching. Request Zero Data Retention from Anthropic for the account (even though content is de-identified, this is good hygiene).
 
-**Output handling:** parse the `tool_use` block from the response. Validate against schema. On schema violation, retry once with a corrective prompt; if still failing, write the recording as an error.
+**Output handling:** parse the `tool_use` block from the response. Validate against schema. On schema violation, retry once with a corrective prompt; if still failing, set note status to `error`.
 
 ### 10.6 Template system
 
-Templates live in Firestore as documents. The MVP ships with 3-5 pre-built templates that the developer creates by hand in collaboration with Dr. Patel:
-
-1. Composite Restoration
-2. Hygiene Recall / Cleaning
-3. Crown Preparation
-4. Comprehensive New Patient Exam
-5. Extraction (Simple)
+Templates live in Firestore under `/practices/{practice_id}/templates/{template_id}`. The MVP ships with **~10 pre-built templates** provided by the pilot dentist and hand-built by the developer during onboarding. The exact list is TBD; templates so far captured from the practice include **Cementation** (see `cementation_template.txt` at repo root) and **Periodic Exam / Adult Prophy** (sample note captured in the design conversation).
 
 Each template needs:
-- Field definitions (probably 8-15 fields per template)
-- Format string for the final note
-- 2-3 few-shot transcript examples with expected outputs (recorded by Dr. Patel during onboarding)
-- Custom keyword list for STT (built from Dr. Patel's vocabulary)
+- Field definitions: ~10-20 fields per template, each with an optional picklist (single/multi/source-referenced) and an optional free-text qualifier slot.
+- Format string that produces the dentist's exact note style, including her clinical shorthand (WNL, BWs, PAs, USS, OHI, etc.).
+- 2-3 few-shot examples: `(transcript, expected_field_values)` pairs from real recordings the dentist makes during onboarding.
+- Dental keyword list tuned to terms she actually uses.
+
+Provider and assistant fields draw their options from practice-level staff lists (`/practices/{pid}/providers`, `/practices/{pid}/assistants`) rather than embedding the lists in every template.
 
 The template editor in the web app is functional but minimal in MVP. A richer visual editor is v2.
 
@@ -538,86 +629,129 @@ The template editor in the web app is functional but minimal in MVP. A richer vi
 
 ## 11. Template System Deep Dive
 
-The template system is the heart of the product. A worked example:
+The template system is the heart of the product. The core abstraction: each field has an optional **picklist part** (single-select, multi-select, or sourced from a practice staff list) and an optional **free-text qualifier**, rendered together on one line by the format string.
 
-### 11.1 Example template: Composite Restoration
+### 11.1 Example template: Periodic Exam / Adult Prophy
 
-**Fields:**
-- `tooth_number` (number, required, 1-32)
-- `surfaces` (multi_choice, required, options: ["M", "O", "D", "B", "L", "I"])
-- `anesthesia_type` (single_choice, options: ["Lidocaine 2% with epi", "Articaine 4% with epi", "Mepivacaine 3%", "None"])
-- `anesthesia_carpules` (number, options: 0, 0.5, 1, 1.5, 2)
-- `isolation` (single_choice, options: ["Rubber dam", "Cotton rolls", "Isolite", "None"])
-- `bonding_agent` (short_text)
-- `composite_material` (short_text)
-- `shade` (short_text, optional)
-- `cure_time_seconds` (number, default: 20)
-- `occlusal_adjusted` (boolean)
-- `patient_tolerance` (single_choice, options: ["Well", "Moderate", "Poor"])
-- `narrative` (long_text, AI-generated)
+Drawn from a real note from the practice. Output should match this format exactly:
 
-**Format string:**
 ```
-Composite restoration, tooth #{tooth_number}, surfaces {surfaces}.
-Anesthesia: {anesthesia_carpules} carpule(s) {anesthesia_type}.
-Isolation: {isolation}.
-Etch and bond with {bonding_agent}. Restored with {composite_material}{shade?, shade {shade}} in incremental fashion, cured {cure_time_seconds} seconds per layer.
-{occlusal_adjusted?Occlusion adjusted with articulating paper.}
-Patient tolerated procedure {patient_tolerance|lower}.
+Note created by Parul Aggarwal on 12/13/2025
+Appt Type: Periodic Exam, Adult Prophy
+Patient Chief Concern: Cleaning and Checkup
+Soft Tissue Exam: WNL
+TMJ Exam: WNL
+X-rays and Images: 4 BWs and 2 PAs
+Prophy Tx: Ultrasonic (USS), Handscale, Polish with fluoride paste, Floss
+The patient's overall Oral Hygiene is: Fair
+Plaque: Moderate generalized
+Calculus: Heavy, more all lowers, Heavy AL
+Bleeding: Heavy generalized
+Stain: Minimal
+Probing: Spot probed. Lots of 4mm, some 5mm around #2,3,30,31
+OHI: Electric Toothbrush, Manual Toothbrush, Waterpik
 
-{narrative}
+Dr. Exam: PPE established.
+Next Visit: 3 months PM
+RDH EB 25612
+Dr. Parul Aggarwal, DDS
 ```
 
-(Syntax sketch — actual implementation can use Handlebars, mustache, or a small custom interpolator.)
+**Fields (abridged):**
 
-**Keyword list:** `["Filtek:2", "Scotchbond:2", "MOD:2", "MO:1.5", "DO:1.5", "BL:1.5", "lidocaine:1.5", "articaine:1.5", "epi:1.5", "rubber dam:1.5", "Isolite:1.5", "distolingual:1.5", "mesiobuccal:1.5", "occlusion:1.5", "articulating:1.5"]`
+| Field name | Picklist part | Qualifier? | Notes |
+|---|---|---|---|
+| `appt_type` | multi: `["Periodic Exam", "Adult Prophy", "Child Prophy", "Limited Exam", "Comprehensive Exam"]` | no | |
+| `chief_concern` | none | yes | Pure free-text. |
+| `soft_tissue` | single: `["WNL", "Lesion noted", "See note"]` | yes | Qualifier used when not WNL. |
+| `tmj` | single: `["WNL", "Click noted", "Tenderness", "See note"]` | yes | |
+| `xrays` | multi: `["FMX", "Pano", "BWs", "PAs", "None"]` | yes | Qualifier carries counts (`4 BWs and 2 PAs`). |
+| `prophy_tx` | multi: `["Ultrasonic (USS)", "Handscale", "Polish with fluoride paste", "Polish without fluoride", "Floss"]` | no | |
+| `oral_hygiene` | single: `["Excellent", "Good", "Fair", "Poor"]` | no | |
+| `plaque` | single: `["None", "Minimal", "Moderate generalized", "Moderate localized", "Heavy"]` | yes | |
+| `calculus` | single: `["None", "Minimal", "Moderate", "Heavy"]` | yes | Real example: picklist `Heavy` + qualifier `more all lowers, Heavy AL`. |
+| `bleeding` | single: `["None", "Minimal", "Localized", "Generalized", "Heavy generalized"]` | yes | |
+| `stain` | single: `["None", "Minimal", "Moderate", "Heavy"]` | yes | |
+| `probing` | single: `["WNL", "Spot probed", "Full perio chart"]` | yes | Qualifier carries the actual readings. |
+| `ohi` | multi: `["Electric Toothbrush", "Manual Toothbrush", "Floss", "Interdental Brush", "Waterpik", "Mouth Rinse"]` | no | |
+| `dr_exam` | none | yes | Short free-text from Dr. (`PPE established.`). |
+| `next_visit` | single: `["3 months Prophy", "4 months Prophy", "6 months Prophy", "3 months PerMaint", "4 months PerMaint", "6 months PerMaint", "SRP", "Restorative", "Referred to Specialist"]` | no | |
+| `provider` | sourced from `providers` | no | Renders as `Dr. Parul Aggarwal, DDS`. |
+| `hygienist` | sourced from `providers` (filtered to RDH) | no | Renders as `RDH EB 25612`. |
+
+**Format string (sketch — final grammar in §11.3):**
+
+```
+Note created by {{provider.display_name}} on {{date}}
+Appt Type: {{appt_type | join:", "}}
+Patient Chief Concern: {{chief_concern}}
+Soft Tissue Exam: {{soft_tissue}}
+TMJ Exam: {{tmj}}
+X-rays and Images: {{xrays.qualifier | default:xrays.picklist | join:" and "}}
+Prophy Tx: {{prophy_tx | join:", "}}
+The patient's overall Oral Hygiene is: {{oral_hygiene}}
+Plaque: {{plaque}}{{plaque.qualifier ? ", " + plaque.qualifier}}
+Calculus: {{calculus}}{{calculus.qualifier ? ", " + calculus.qualifier}}
+Bleeding: {{bleeding}}
+Stain: {{stain}}
+Probing: {{probing}}{{probing.qualifier ? ". " + probing.qualifier}}
+OHI: {{ohi | join:", "}}
+
+Dr. Exam: {{dr_exam}}
+Next Visit: {{next_visit}}
+{{hygienist.display_name}}
+{{provider.display_name}}
+```
+
+**Keyword list (representative):** `["WNL:1.5", "USS:1.5", "BWs:1.5", "PAs:1.5", "FMX:1.5", "PerMaint:1.5", "SRP:1.5", "PPE:1.5", "OHI:1.5", "Waterpik:1.5", "Ultrasonic:1.5", "Handscale:1.5", "Prophy:1.5", "perio:1.5", "distolingual:1.5", "mesiobuccal:1.5"]`
 
 **Few-shot example (one of three):**
 
-Transcript: *"Composite on 14, MO. One carpule lido with epi. Rubber dam. Scotchbond Universal, Filtek shade A2, two-mil increments, 20 seconds each. Articulating paper to adjust. Tolerated well."*
+Transcript: *"Periodic exam and adult prophy. Cleaning and checkup. Soft tissue and TMJ within normal limits. Four bitewings and two PAs. Ultrasonic, handscale, polish with fluoride paste, floss. Oral hygiene fair. Moderate generalized plaque. Heavy calculus, more on the lowers and lingual. Heavy generalized bleeding. Minimal stain. Spot probed, lots of fours, some fives around two three thirty thirty-one. Electric toothbrush, manual, Waterpik. PPE established. Three months perio maintenance."*
 
-Expected output:
+Expected field values:
 ```json
 {
-  "tooth_number": 14,
-  "surfaces": ["M", "O"],
-  "anesthesia_type": "Lidocaine 2% with epi",
-  "anesthesia_carpules": 1,
-  "isolation": "Rubber dam",
-  "bonding_agent": "Scotchbond Universal",
-  "composite_material": "Filtek",
-  "shade": "A2",
-  "cure_time_seconds": 20,
-  "occlusal_adjusted": true,
-  "patient_tolerance": "Well",
-  "narrative": "Performed composite restoration on tooth #14, mesial-occlusal surfaces. Local anesthesia administered (one carpule of lidocaine 2% with epinephrine). Operative field isolated with rubber dam. Caries removed; tooth prepared and etched. Scotchbond Universal applied per manufacturer instructions. Filtek composite, shade A2, placed in 2mm increments with 20-second light cure per layer. Occlusion verified and adjusted with articulating paper. Patient tolerated the procedure well."
+  "appt_type":      { "picklist": ["Periodic Exam", "Adult Prophy"], "qualifier": null,                              "confidence": "high" },
+  "chief_concern":  { "picklist": null,                              "qualifier": "Cleaning and Checkup",            "confidence": "high" },
+  "soft_tissue":    { "picklist": "WNL",                             "qualifier": null,                              "confidence": "high" },
+  "tmj":            { "picklist": "WNL",                             "qualifier": null,                              "confidence": "high" },
+  "xrays":          { "picklist": ["BWs", "PAs"],                    "qualifier": "4 BWs and 2 PAs",                 "confidence": "high" },
+  "prophy_tx":      { "picklist": ["Ultrasonic (USS)", "Handscale", "Polish with fluoride paste", "Floss"], "qualifier": null, "confidence": "high" },
+  "oral_hygiene":   { "picklist": "Fair",                            "qualifier": null,                              "confidence": "high" },
+  "plaque":         { "picklist": "Moderate generalized",            "qualifier": null,                              "confidence": "high" },
+  "calculus":       { "picklist": "Heavy",                           "qualifier": "more all lowers, Heavy AL",       "confidence": "high" },
+  "bleeding":       { "picklist": "Heavy generalized",               "qualifier": null,                              "confidence": "high" },
+  "stain":          { "picklist": "Minimal",                         "qualifier": null,                              "confidence": "high" },
+  "probing":        { "picklist": "Spot probed",                     "qualifier": "Lots of 4mm, some 5mm around #2,3,30,31", "confidence": "high" },
+  "ohi":            { "picklist": ["Electric Toothbrush", "Manual Toothbrush", "Waterpik"], "qualifier": null,       "confidence": "high" },
+  "dr_exam":        { "picklist": null,                              "qualifier": "PPE established.",                "confidence": "high" },
+  "next_visit":     { "picklist": "3 months PerMaint",               "qualifier": null,                              "confidence": "high" }
 }
 ```
 
-### 11.2 The narrative field
+### 11.2 Confidence marking
 
-The narrative is a hybrid generation: the LLM is given the extracted fields as ground truth and instructed to write a clinical paragraph consistent with those facts. The prompt says: *"Your narrative must be consistent with the extracted fields. Do not introduce clinical details not present in the transcript or fields."* This prevents the model from inventing materials, shades, or findings.
+Each field returned by the LLM carries an `ai_confidence`:
 
-The clinician can edit the narrative directly in the review panel. Edits are preserved.
-
-### 11.3 Confidence marking
-
-Each extracted field comes back with a confidence value:
 - **high:** the field was explicitly stated in the transcript.
-- **inferred:** the field was reasonably inferred from context but not stated outright (e.g., shade defaulting to A2 when not mentioned, based on practice patterns).
-- **missing:** the field was not mentioned at all and is left empty.
+- **inferred:** the field was reasonably inferred from context but not stated outright (e.g. provider defaulting to the signed-in clinician when not mentioned).
+- **missing:** the field was not mentioned at all. The field is left empty (or carrying the user's prior pick if she set it manually).
 
-The UI color-codes these green / yellow / red, with icons alongside for non-color-only accessibility. The clinician's eye is drawn to anything not high-confidence.
+The UI marks inferred and missing fields so the dentist's eye is drawn to anything not high-confidence. Color is used but never alone — icons accompany it for accessibility.
 
-### 11.4 Format string semantics
+### 11.3 Format string semantics
 
 The format string supports:
-- Plain substitution: `{field_name}` is replaced by the field value.
-- Conditional fragments: `{field?...content...}` only renders if field is truthy.
-- Filters: `{field|upper}`, `{field|lower}`, `{field|join:, }` for arrays.
-- Default values: `{field|default:N/A}`.
 
-If a required field is missing, the format string renders a `[MISSING: field_name]` placeholder rather than blocking the note. The clinician can fill it in manually before copying.
+- **Plain substitution:** `{{field_name}}` is replaced by the field's rendered value (picklist + qualifier joined per the field's rendering rule).
+- **Sub-paths:** `{{field_name.picklist}}`, `{{field_name.qualifier}}`, `{{field_name.display_name}}` (for sourced references like provider/assistant).
+- **Conditional fragments:** `{{ field ? "literal text" + field.qualifier }}` renders the right-hand expression only if the left-hand condition is truthy.
+- **Filters:** `{{field | upper}}`, `{{field | lower}}`, `{{field | join:", "}}` for arrays, `{{field | default:N/A}}` for fallbacks.
+
+If a required field is missing, the format string renders `[MISSING: field_name]` inline rather than blocking the note. The dentist can fill it in manually before copying.
+
+We will adopt a single grammar at implementation time (Handlebars-compatible is the leading candidate). The examples in this document use `{{ }}` syntax to disambiguate from JSON sample data; the final renderer in `shared/src/format.ts` will codify the exact grammar.
 
 ---
 
@@ -740,11 +874,13 @@ A few levers for later:
 
 This section captures decisions that have been made, with rationale. Future contributors should not re-litigate these without strong reason.
 
-### 14.1 Two surfaces: mobile capture + web compose
+### 14.1 Web-only MVP; symmetric mobile PWA in v1.1
 
-**Decision:** Split the product into a mobile PWA for capture and a web app for compose. Do not build a single app that does both.
+**Decision:** MVP is a single web app handling the full lifecycle (create / record / fill picklist / edit qualifiers / review / copy / mark filed). v1.1 adds a mobile PWA with the *same* capabilities — not the asymmetric capture-only role originally specified. Cross-device handoff is provided by Firestore acting as the source of truth from the moment of `+ New Note`.
 
-**Rationale:** Capture and compose have fundamentally different ergonomic constraints. Capture happens chairside, possibly with gloved hands, in a noisy environment, with the clinician about to move to another patient — it demands one-tap operation and zero ceremony. Compose happens at a workstation between patients or end-of-day, with time to review carefully and edit — it demands a rich UI with field-level editing and a transcript reference. A single app would compromise both. The split also lets us optimize each surface for the device it runs on (phone vs. desktop) and the bandwidth/latency profile it has (mobile/cellular vs. office wifi).
+**Rationale (web-only MVP):** A single surface dramatically reduces MVP scope — no PWA install flow to debug, no iOS Safari `MediaRecorder` quirks, no offline IndexedDB queue, no two-device tag-sync race. The dentist is at her workstation between patients anyway, which is also where the PMS picklist + free-text typing happens today; adding recording to the same surface keeps the entire workflow in one place. The mobile PWA was the highest-friction part of the original design; deferring it shortens the path to a pilot.
+
+**Rationale (symmetric mobile in v1.1):** The original asymmetric split (phone records, web reviews) assumed work flows one direction. In practice work flows both directions: the dentist may start a recording at her workstation and pick it up on her phone, or vice versa. Symmetric surfaces with Firestore as the source of truth are simpler than asymmetric surfaces with bespoke sync. The earlier reasoning about ergonomic differences still holds — the mobile UI will optimize for chairside one-tap operation — but capability sets are the same on both surfaces.
 
 ### 14.2 PWA-first for mobile
 
@@ -788,9 +924,9 @@ This section captures decisions that have been made, with rationale. Future cont
 
 **Rationale:** Best accuracy on clinical jargon, including dental terminology, of the major providers tested. Strong keyword-boost feature (Keyterm Prompting) which is the single largest accuracy lever. Sub-5-second latency on typical recordings. BAA available if we ever need it. Reasonable cost. Clean SDK and good docs. The thin provider-abstraction layer in the backend lets us swap to alternatives without rewriting if Deepgram proves wrong.
 
-### 14.9 Claude Sonnet 4 for template-fill
+### 14.9 Claude Sonnet 4.6 for template-fill
 
-**Decision:** Use Claude Sonnet 4 via the Anthropic API as the workhorse LLM for template extraction and narrative generation. Use tool-use for structured output. Use prompt caching.
+**Decision:** Use Claude Sonnet 4.6 via the Anthropic API as the workhorse LLM for template field-fill. Use tool-use for structured output. Use prompt caching. Pin the exact model ID at implementation time and re-verify on each upgrade.
 
 **Rationale:** Excellent at structured extraction, reliable JSON output via tool-use, strong clinical language handling, good cost-quality balance. Tool-use guarantees schema-conforming output; the response is unambiguous. Prompt caching reduces the cost of stable per-template system prompts by ~30%. Sonnet is the sweet spot — Opus is overkill for this task, Haiku is plausible but accuracy needs more verification before we trust it on harder templates. The provider abstraction also makes GPT-4o or Gemini 2.5 Pro swappable for comparison.
 
@@ -814,9 +950,9 @@ This section captures decisions that have been made, with rationale. Future cont
 
 ### 14.13 Hardcoded templates for MVP
 
-**Decision:** Ship MVP with 3-5 pre-built templates created in collaboration with the pilot dentist. Defer the visual template editor.
+**Decision:** Ship MVP with ~10 pre-built templates created in collaboration with the pilot dentist. Defer the visual template editor.
 
-**Rationale:** The template editor is a real interaction-design challenge — field types, validation, format strings, few-shot examples are not trivial to expose in a UI. Building it well takes time we'd rather spend on the core capture-and-review loop. The pilot dentist's templates can be hand-crafted by the developer during onboarding (an afternoon's work per template) and edited via a minimal admin UI or direct Firestore console for MVP. The visual editor is a v2 priority once we know what edits clinicians actually need to make.
+**Rationale:** The template editor is a real interaction-design challenge — field types, picklist option sets, qualifier slots, format strings, few-shot examples are not trivial to expose in a UI. Building it well takes time we'd rather spend on the core record-and-review loop. The pilot dentist already uses ~10 templates in her PMS picklist workflow; the developer hand-builds those during onboarding (an afternoon's work per template) and edits them via a minimal form-based admin UI or direct Firestore console for MVP. The visual editor is a v2 priority once we know what edits clinicians actually need to make.
 
 ### 14.14 Explicit template selection
 
@@ -836,17 +972,17 @@ This section captures decisions that have been made, with rationale. Future cont
 
 **Rationale:** Audio has no further use once the transcript exists. It is the largest blob in the system (~225 KB per recording at 75 seconds, ~2 MB at 10 minutes), the most sensitive even when de-identified, and the most embarrassing if leaked. Aggressive deletion shrinks the data footprint, simplifies the breach posture, and reinforces the de-identified-by-design property.
 
-### 14.17 Mobile shows status, not content
+### 14.17 Mobile shows finished content (when v1.1 lands)
 
-**Decision:** The mobile capture surface displays pending recording status but not draft contents. Review and editing happens only on the web app.
+**Decision (revised):** When the mobile PWA is added in v1.1, it has the *same* capabilities as the web app — including review and editing of finished notes. The earlier decision to restrict mobile to "status only" is reversed.
 
-**Rationale:** Phones are shared more than workstations, are lost more, and the small screen is poorly suited to careful note review anyway. Keeping draft content off the phone tightens the data surface. The phone's job is "capture" — clean separation from "compose."
+**Rationale:** With Firestore as the source of truth and cross-device handoff a core requirement, an asymmetric capability split creates more friction than data-surface tightening saves. The mobile UI should still default to a capture-optimized view (large mic button, recent notes) and require an explicit action to open the review panel — keeping the *happy path* focused on capture, while not locking the dentist out of editing on her phone when she needs to.
 
-### 14.18 Tag is local-first, optionally synced
+### 14.18 Patient tag stored in Firestore subcollection from the start
 
-**Decision:** The patient tag is stored locally on the capture device. It is synced to the web app via an authenticated channel, and stored in an isolated Firestore subcollection (`patient_tags`) with stricter security rules.
+**Decision (revised):** The patient tag lives in the `patient_tags` Firestore subcollection from the moment a note is created. Firestore's offline persistence handles device-local caching; we do not maintain a separate local-only store.
 
-**Rationale:** Keeping the PHI footprint as small and as access-controlled as possible. The tag is the only piece of PHI in the system, so we corral it. Pure device-local with no backend would be even tighter, but cross-device sync ergonomics suffer. The isolated subcollection is a reasonable compromise — the rest of the backend remains PHI-free.
+**Rationale:** "Local-first, optionally synced" was the original framing for an asymmetric capture/compose split. With symmetric surfaces and Firestore as the source of truth, the tag must be in Firestore for the other device to see it. Firestore's built-in offline persistence covers the "tag visible without network" case, and the isolated subcollection with stricter security rules (no list permission) keeps PHI corralled to one place. This is simpler than the original two-tier model and equivalent on the data surface.
 
 ---
 
@@ -962,11 +1098,13 @@ This section captures alternatives that were considered and explicitly rejected,
 
 **Why rejected:** Once the transcript exists, audio has no clinical or product purpose. Keeping it expands the data footprint by orders of magnitude (audio is ~100x larger than transcript) and creates a more sensitive blob to protect. The transcript itself is the artifact. Aggressive deletion is the right call.
 
-### 15.19 Mobile app shows finished notes — REJECTED for MVP
+### 15.19 Mobile app shows finished notes — REVISED: now planned for v1.1
 
-**Proposal:** Let the dentist review and approve drafts on her phone in addition to or instead of the web app.
+**Original proposal:** Let the dentist review and approve drafts on her phone in addition to or instead of the web app.
 
-**Why rejected:** Phone screens are small and ill-suited to careful note review. Phones are shared more than workstations and lost more often. Keeping the phone surface focused on capture-only tightens the data footprint and the UX. We may add a "preview" of the finished note for quick verification in v2, but full review-and-edit stays on web.
+**Original rationale for rejection:** Phone screens are small and ill-suited to careful note review; phones are shared more than workstations and lost more often; keeping the phone surface focused on capture-only tightens the data footprint and the UX.
+
+**Revised stance (2026-05-19):** The mobile PWA, when added in v1.1, will support full review and editing — the same capability set as the web app. Cross-device handoff (work flows in both directions between phone and workstation) is a core requirement; an asymmetric capability split creates more friction than data-surface tightening saves. See §14.1 and §14.17 for the broader decision.
 
 ### 15.20 Real-time human transcription review during capture — REJECTED
 
@@ -1058,33 +1196,41 @@ Should we keep a versioned history of clinician edits to drafts? Useful for show
 
 ## 17. Roadmap
 
-### 17.1 MVP (target: 100-150 engineering hours)
+### 17.1 MVP — web-only (target: 100-150 engineering hours)
 
 The minimum lovable product:
 
-- **Mobile PWA capture** with audio recording, tag field, template chip selection, offline queue, status indicators
-- **Web compose app** with drafts list, review panel, field-level editing, narrative editing, copy-to-clipboard, mark-filed
-- **Cloud Functions pipeline:** upload trigger → Deepgram STT → Claude Sonnet 4 template-fill → Firestore draft
-- **Firebase Auth** with email + password, MFA available
-- **3-5 hand-built templates:** composite, hygiene recall, crown prep, comprehensive exam, simple extraction
-- **Minimal admin UI** for template editing (form-based, not visual)
-- **Basic monitoring:** Sentry for errors, BetterStack for uptime, Anthropic and Deepgram usage alerts
-- **One pilot dentist** in active daily use
+- **Web app** running in the workstation browser, with the full lifecycle: `+ New Note`, browser-microphone recording, augment / re-record flows, picklist editing, free-text qualifier editing, live preview of the assembled note, Copy Note, Mark Filed.
+- **Cloud Functions pipeline:** Storage upload trigger → Deepgram STT (per-segment, with augment appending transcript) → Claude Sonnet 4.6 field-fill → Firestore note update.
+- **Firebase Auth** with email + password; MFA (TOTP) wired and required before any external customer.
+- **~10 hand-built templates** provided by the pilot dentist and authored by the developer during onboarding. Cementation and Periodic Exam / Adult Prophy are confirmed; the rest TBD.
+- **Practice-level staff lists** (providers, assistants) for picklist sourcing.
+- **Minimal admin UI** for template editing (form-based, not visual) and staff list editing.
+- **Basic monitoring:** Sentry for errors, BetterStack for uptime, Anthropic and Deepgram usage alerts.
+- **One pilot dentist** in active daily use.
 
 Excluded from MVP:
+- Mobile PWA (deferred to v1.1, see below)
 - PHI scanner
 - Visual template editor
 - Multi-tenant (multiple practices on one backend instance)
-- Multi-user within a practice (hygienists, assistants)
+- Multi-user within a practice beyond the pilot dentist (hygienists, assistants, admin role)
 - Auto-detect template
 - Native mobile apps
-- Apple Watch
 - Streaming STT
 - Multi-template chaining
-- Audit / edit history
+- Audit / edit-history viewer (audit rows are written; viewing them is v2)
 - Analytics dashboard
 
-### 17.2 v2 (post-pilot, after 2-3 months of MVP usage)
+### 17.2 v1.1 — mobile PWA (immediately after MVP pilot)
+
+Adds the mobile capture surface. Symmetric capabilities with the web app: create / record / edit picklist / edit qualifiers / review / copy / mark filed. Cross-device handoff via Firestore (already the source of truth from MVP).
+
+- **Mobile PWA** with browser-microphone recording, large mic button optimized for gloved hands, template selection optimized for one-tap operation, offline IndexedDB upload queue.
+- **No schema changes** — the MVP data model already accommodates multi-device.
+- **No new backend pipeline** — Cloud Functions and the LLM/STT integrations are unchanged.
+
+### 17.3 v2 (post-pilot, after 2-3 months of MVP + v1.1 usage)
 
 Driven by pilot feedback. Likely priorities:
 
@@ -1094,10 +1240,11 @@ Driven by pilot feedback. Likely priorities:
 - **Apple Watch capture** via native iOS app
 - **Auto-detect template** from dictation
 - **Practice administrator dashboard** with usage and quality metrics
-- **Configurable retention** for filed drafts
+- **Configurable retention** for filed notes
 - **Onboarding wizard** for new practices to build templates
+- **Picklist suggestions** from dictation alone (a stretch: dictate the whole encounter and have us suggest the PMS picklist answers in addition to producing the assembled note)
 
-### 17.3 v3 (12+ months out)
+### 17.4 v3 (12+ months out)
 
 Scale, premium tiers, and platform expansion:
 

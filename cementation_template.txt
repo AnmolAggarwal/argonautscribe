@@ -1,0 +1,76 @@
+Prompt 1 is which tooth
+
+
+Prompt 2 of 8:
+Type of Restoration
+ Zirconia crown
+ Temp crown
+ Fillings
+ Sedative fillings (interim)
+ PFM
+ Bridge
+ Implant crown
+ Veneer
+ Crown Repair
+ 
+ 
+ 
+Prompt 3 of 8:
+Adjustment (restoration)
+ Adjusted and polished as needed
+ No adjustment needed
+ 
+
+Prompt 4 of 8:
+Cement Type
+ Temp Cement (Telio)
+ Panavia
+ TempBond
+ RelyX
+ 
+Prompt 5 of 8:
+Patient warning
+ no warning needed
+ decay was deep and extensive
+ may need root canal treatment
+ may need adjustments
+ may need crown
+ may need new crown
+ may need to be extracted
+ may need a night guard
+ may have post op sensitivity for more than 2 weeks
+ 
+Prompt 6 of 8:
+Next Visit
+ 3 months Prophy
+ 4 months Prophy
+ 6 months Prophy
+ 3 months PerMaint
+ 4 months PerMaint
+ SRP
+ Restorative
+ Cementation
+ Referred to Specialist
+ Consultation
+ Delivery Invisalign Aligners
+ Invisalign Refinement
+ Delivery NG
+ 3 months re-evaluation
+ 4 months re-evaluation
+ 6 months re-evaluation
+ 
+Prompt 7 of 8:
+Provider
+ Dr. Parul Aggarwal, DDS
+ Dr. Sahana Prasad, DDS
+ TN36859 RDH
+ 
+Prompt 8 of 8:
+Assistant
+ Kristie
+ Veronica
+ Temp: [enter name]
+ Hamida
+ Esmeralda
+ 
+ 

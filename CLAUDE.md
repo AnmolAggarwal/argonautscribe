@@ -4,13 +4,13 @@ This document is the working-context file for anyone — human developer or AI a
 
 **Read this entire document before writing any code.** Several of the rules below are load-bearing for the privacy posture of the system, and violating them would break the entire compliance design.
 
-> **Status (2026-05-19):** Repo contains spec + working-context only. No code, no `package.json`, no Firebase project yet. The first substantive task is bootstrapping the monorepo layout described in §4. Commands (build, test, lint, emulator, benchmark) will be filled in once that bootstrap lands — until then, treat §4 as the target structure rather than a description of what exists.
+> **Status (2026-05-19):** Repo contains spec + working-context + a starter monorepo bootstrap. Commands (build, test, lint, emulator, benchmark) will be filled in below as they stabilize. The MVP product scope is **web-only**: the dentist creates a note, records audio in the workstation browser, fills picklist fields and free-text qualifiers, reviews the assembled note, copies it to the clipboard, and pastes into the PMS. A mobile PWA with symmetric capabilities is **v1.1**, immediately after MVP pilot — the data model already accommodates it (see SPEC §9 and §17.2).
 
 ---
 
 ## 1. One-Paragraph Project Summary
 
-Dental Scribe is a clinical documentation tool for small dental practices. A clinician records a short voice note on a mobile PWA after each procedure, and reviews/copies an AI-generated structured note from a companion web app between patients. The pipeline is: audio → Deepgram Nova-3 Medical → Claude Sonnet 4 → structured draft → clipboard → PMS. The architecture is deliberately designed to keep Protected Health Information out of the AI pipeline; the clinician dictates clinical content only, and patient identifiers live in a separate "tag" field that is never sent to any third-party API. The stack is Firebase end to end (Firestore, Cloud Functions, Cloud Storage, Auth, Hosting).
+Dental Scribe is a clinical documentation tool for small dental practices. The dentist creates a note in the web app, optionally taps through picklist fields for the procedure template AND/OR dictates the per-encounter specifics into her workstation microphone, reviews the AI-assembled structured note, and copies it as one block into her PMS — bypassing the PMS's own picklist wizard. The output is structured throughout (every line is `Label: value(s)` in her exact note style), not a free-text paragraph. The pipeline is: audio → Deepgram Nova-3 Medical → Claude Sonnet 4.6 (with tool-use, given the template schema and any picklist values the dentist already set) → merged field values → format-string render → clipboard → PMS. The architecture is deliberately designed to keep Protected Health Information out of the AI pipeline; the dentist dictates clinical content only, and patient identifiers live in a separate "tag" field that is never sent to any third-party API. The stack is Firebase end to end (Firestore, Cloud Functions, Cloud Storage, Auth, Hosting). **MVP is web-only**; a mobile PWA with symmetric capabilities is v1.1.
 
 For the full spec including user personas, requirements, data model, cost analysis, decisions made, decisions rejected, and roadmap, read `SPEC.md`.
 
@@ -123,14 +123,11 @@ The intended top-level layout (not yet created — implementer to bootstrap):
 ```
 dental-scribe/
 ├── apps/
-│   ├── mobile/              # The mobile capture PWA
-│   │   ├── src/
-│   │   ├── public/
-│   │   └── package.json
-│   └── web/                 # The web compose app
+│   └── web/                 # The web app (MVP)
 │       ├── src/
 │       ├── public/
 │       └── package.json
+│   # apps/mobile/ added in v1.1; same Firestore backend, no schema changes
 ├── functions/               # Cloud Functions
 │   ├── src/
 │   │   ├── processRecording.ts
@@ -359,27 +356,51 @@ service cloud.firestore {
     match /clinicians/{cid} {
       allow read, write: if request.auth != null && request.auth.uid == cid;
 
-      match /recordings/{rid} {
+      match /notes/{nid} {
         allow read, write: if request.auth != null && request.auth.uid == cid;
+
+        match /segments/{sid} {
+          allow read, write: if request.auth != null && request.auth.uid == cid;
+        }
       }
 
-      match /drafts/{rid} {
-        allow read, write: if request.auth != null && request.auth.uid == cid;
-      }
-
-      match /patient_tags/{rid} {
+      match /patient_tags/{nid} {
         // Tighter: read only by self, no list queries.
         allow get: if request.auth != null && request.auth.uid == cid;
         allow create, update: if request.auth != null && request.auth.uid == cid;
         allow delete: if request.auth != null && request.auth.uid == cid;
         // Note: deliberately no 'list' permission. Tags are fetched one at a time
-        // by recording_id during web app sync.
+        // by note_id when the note row appears in the list.
       }
     }
 
-    match /practices/{pid}/templates/{tid} {
+    match /practices/{pid} {
+      match /templates/{tid} {
+        allow read: if request.auth != null && belongsToPractice(request.auth.uid, pid);
+        allow write: if request.auth != null && isAdminOfPractice(request.auth.uid, pid);
+
+        match /versions/{vid} {
+          allow read: if request.auth != null && belongsToPractice(request.auth.uid, pid);
+          allow write: if request.auth != null && isAdminOfPractice(request.auth.uid, pid);
+        }
+      }
+
+      match /providers/{prov} {
+        allow read: if request.auth != null && belongsToPractice(request.auth.uid, pid);
+        allow write: if request.auth != null && isAdminOfPractice(request.auth.uid, pid);
+      }
+
+      match /assistants/{asst} {
+        allow read: if request.auth != null && belongsToPractice(request.auth.uid, pid);
+        allow write: if request.auth != null && isAdminOfPractice(request.auth.uid, pid);
+      }
+    }
+
+    match /audit/{pid}/events/{eid} {
+      // Append-only audit log, content-free. Reads gated to practice members.
       allow read: if request.auth != null && belongsToPractice(request.auth.uid, pid);
-      allow write: if request.auth != null && isAdminOfPractice(request.auth.uid, pid);
+      allow create: if request.auth != null && belongsToPractice(request.auth.uid, pid);
+      allow update, delete: if false;
     }
 
     // Helper functions
@@ -440,11 +461,11 @@ First invocation after idle can take 2-5 seconds. For an async pipeline this is 
 
 ### 9.2 Firestore listener costs
 
-A web app that subscribes to a large drafts collection and refreshes frequently can run up document-read costs. Use single-document listeners where possible, or query-with-limit and pagination. For the drafts list, limit to the current day or last 50 drafts.
+A web app that subscribes to a large notes collection and refreshes frequently can run up document-read costs. Use single-document listeners where possible, or query-with-limit and pagination. For the notes list, limit to the current day or last 50 notes.
 
 ### 9.3 Firestore offline cache
 
-The Firestore SDK caches reads locally. This is great for offline, but means a stale draft might briefly show up after a "mark filed" delete. Use `serverTimestamp()` and check freshness, or invalidate the cache explicitly after critical writes.
+The Firestore SDK caches reads locally. This is great for offline, but means a stale note might briefly show up after a "mark filed" delete. Use `serverTimestamp()` and check freshness, or invalidate the cache explicitly after critical writes.
 
 ### 9.4 Browser MediaRecorder quirks
 
@@ -468,13 +489,13 @@ Wide format support, but very large files (>100 MB) require the streaming endpoi
 
 1 MB per document. A very long transcript could approach this. Validate length before writing; if a recording produced an absurdly long transcript (over 50 KB), something went wrong upstream — flag it as an error rather than truncating silently.
 
-### 9.9 Tag synchronization race conditions
+### 9.9 Tag synchronization race conditions (v1.1+)
 
-Phone writes a tag locally. User opens the web app on the workstation before the phone has synced. Web app tries to display the draft and has no tag. UX: show "untagged" in the drafts list with a refresh hint. Don't block draft display on tag sync.
+Not a concern in the web-only MVP — there's only one device. When mobile lands in v1.1: phone writes a tag to Firestore on note creation, web app subscribes to `patient_tags` per-note as notes appear in the list. Firestore handles the sync. UX: show "untagged" in the notes list with a refresh hint if the tag doc hasn't arrived yet. Don't block note display on tag arrival.
 
 ### 9.10 Template version drift
 
-A clinician edits a template after some drafts have been created from the previous version. Old drafts retain the previous template version reference. The review panel must be able to render an old draft against the version that created it, not the current version. Store template version with each draft.
+A clinician edits a template after some notes have been created from the previous version. Old notes retain a `template_version` reference, and the prior version is preserved at `/practices/{pid}/templates/{tid}/versions/{v}`. The review panel must render an old note against the version that created it, not the current version. Store the template version on every note.
 
 ---
 
@@ -505,9 +526,9 @@ A pointer guide to the codebase (once it exists):
 
 | Question | Where to look |
 |---|---|
-| How does audio get uploaded? | `apps/mobile/src/lib/upload.ts` |
-| How does the offline queue work? | `apps/mobile/src/lib/queue.ts` (IndexedDB via `idb`) |
-| What happens when a recording finishes uploading? | `functions/src/processRecording.ts` |
+| How does audio get uploaded? | `apps/web/src/lib/upload.ts` (mobile equivalent added in v1.1) |
+| How does the offline queue work? | Not in MVP. Added in v1.1 as `apps/mobile/src/lib/queue.ts` (IndexedDB via `idb`) |
+| What happens when an audio segment finishes uploading? | `functions/src/processSegment.ts` |
 | How is the LLM prompt built? | `functions/src/prompts/buildPrompt.ts` |
 | Where are template format strings rendered? | `shared/src/format.ts` |
 | Where are the few-shot examples per template? | Stored in Firestore template documents, not in code |
