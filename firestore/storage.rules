@@ -1,0 +1,31 @@
+rules_version = '2';
+
+// ArgonautScribe Cloud Storage Security Rules.
+//
+// Audio segments are the only objects stored. Uploads land at
+//   notes/{note_id}/segments/{segment_id}
+// with object metadata { clinician_id, note_id, segment_id }. The
+// clinician_id in metadata MUST equal the authenticated user.
+//
+// Audio is deleted by the processSegment Cloud Function within seconds of
+// successful STT. A 24-hour lifecycle rule on the bucket is the safety net
+// for any blobs that escape explicit deletion.
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    match /notes/{noteId}/segments/{segmentId} {
+      allow create: if request.auth != null
+                    && request.resource.metadata.clinician_id == request.auth.uid
+                    && request.resource.size < 25 * 1024 * 1024; // 25 MB cap
+      allow read, delete: if request.auth != null
+                          && resource.metadata.clinician_id == request.auth.uid;
+      allow update: if false;
+    }
+
+    // Default deny.
+    match /{path=**} {
+      allow read, write: if false;
+    }
+  }
+}

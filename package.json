@@ -1,0 +1,31 @@
+{
+  "name": "argonaut-scribe",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Clinical documentation tool for small dental practices.",
+  "packageManager": "pnpm@9.0.0",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "build": "pnpm -r --parallel build",
+    "test": "pnpm -r --parallel test",
+    "lint": "pnpm -r --parallel lint",
+    "typecheck": "pnpm -r --parallel typecheck",
+    "dev:web": "pnpm --filter @argonaut/web dev",
+    "build:web": "pnpm --filter @argonaut/web build",
+    "build:functions": "pnpm --filter @argonaut/functions build",
+    "build:shared": "pnpm --filter @argonaut/shared build",
+    "emulators": "firebase emulators:start",
+    "format": "prettier --write \"**/*.{ts,tsx,js,json,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md}\""
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "eslint": "^8.57.0",
+    "prettier": "^3.2.0",
+    "typescript": "^5.4.0"
+  }
+}

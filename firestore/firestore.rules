@@ -1,0 +1,82 @@
+rules_version = '2';
+
+// ArgonautScribe Firestore Security Rules.
+// See CLAUDE.md §7 for the principles. Test against the emulator before deploy.
+//
+// Defaults to deny. Every collection has explicit allow rules. The patient_tags
+// subcollection is the only PHI in the system and has stricter rules: no list
+// permission, no Cloud Function access by convention.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Clinician profile and per-clinician data.
+    match /clinicians/{cid} {
+      allow read, write: if request.auth != null && request.auth.uid == cid;
+
+      // Notes — the full lifecycle (new → recording → ... → filed) lives here.
+      match /notes/{nid} {
+        allow read, write: if request.auth != null && request.auth.uid == cid;
+
+        // Per-note audio segment metadata.
+        match /segments/{sid} {
+          allow read, write: if request.auth != null && request.auth.uid == cid;
+        }
+      }
+
+      // PHI: patient tags. Stricter rules — no list, no Cloud Function read.
+      match /patient_tags/{nid} {
+        allow get: if request.auth != null && request.auth.uid == cid;
+        allow create, update: if request.auth != null && request.auth.uid == cid;
+        allow delete: if request.auth != null && request.auth.uid == cid;
+        // Deliberately no 'list' permission.
+      }
+    }
+
+    // Practice-scoped data: templates and staff lists.
+    match /practices/{pid} {
+      match /templates/{tid} {
+        allow read: if request.auth != null && belongsToPractice(request.auth.uid, pid);
+        allow write: if request.auth != null && isAdminOfPractice(request.auth.uid, pid);
+
+        // Archived template versions for audit / re-render of old notes.
+        match /versions/{vid} {
+          allow read: if request.auth != null && belongsToPractice(request.auth.uid, pid);
+          allow write: if request.auth != null && isAdminOfPractice(request.auth.uid, pid);
+        }
+      }
+
+      match /providers/{prov} {
+        allow read: if request.auth != null && belongsToPractice(request.auth.uid, pid);
+        allow write: if request.auth != null && isAdminOfPractice(request.auth.uid, pid);
+      }
+
+      match /assistants/{asst} {
+        allow read: if request.auth != null && belongsToPractice(request.auth.uid, pid);
+        allow write: if request.auth != null && isAdminOfPractice(request.auth.uid, pid);
+      }
+    }
+
+    // Content-free audit log. Append-only, readable by practice members.
+    match /audit/{pid}/events/{eid} {
+      allow read: if request.auth != null && belongsToPractice(request.auth.uid, pid);
+      allow create: if request.auth != null && belongsToPractice(request.auth.uid, pid);
+      allow update, delete: if false;
+    }
+
+    // Default deny.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ---- Helpers ----
+    function belongsToPractice(uid, pid) {
+      return get(/databases/$(database)/documents/clinicians/$(uid)).data.practice_id == pid;
+    }
+
+    function isAdminOfPractice(uid, pid) {
+      let clinician = get(/databases/$(database)/documents/clinicians/$(uid)).data;
+      return clinician.practice_id == pid && clinician.role == "admin";
+    }
+  }
+}
