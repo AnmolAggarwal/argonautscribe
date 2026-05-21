@@ -7,6 +7,7 @@ import { db } from "../lib/firebase";
 import { useAuth } from "../lib/auth";
 import { markFiled, writeFieldValue, writePatientTag } from "../lib/notes";
 import { FieldRow } from "../components/FieldRow";
+import { RecordingPanel } from "../components/RecordingPanel";
 
 /**
  * The note workspace — the main screen of the product.
@@ -196,6 +197,12 @@ export function NoteWorkspace() {
           </label>
         </div>
       </header>
+
+      <RecordingPanel
+        clinicianUid={user.uid}
+        noteId={note.note_id}
+        noteStatus={note.status}
+      />
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2rem" }}>
         <section>

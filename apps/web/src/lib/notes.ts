@@ -16,8 +16,9 @@ import {
   setDoc,
   writeBatch,
 } from "firebase/firestore";
-import type { FieldValue, Template } from "@argonaut/shared";
-import { db } from "./firebase";
+import { ref as storageRef, deleteObject } from "firebase/storage";
+import type { AudioSegment, FieldValue, Template } from "@argonaut/shared";
+import { db, storage } from "./firebase";
 
 /** "2026-05-21" — day-level only per the PHI invariants (SPEC §12.3). */
 function todayIso(): string {
@@ -122,21 +123,36 @@ export async function markFiled(
   practiceId: string,
   templateId: string,
 ): Promise<void> {
-  const batch = writeBatch(db);
-
-  // Delete all segment docs under this note.
+  // First read all segment docs; we need them to know which Storage
+  // objects to delete (and to include in the Firestore batch).
   const segmentsRef = collection(db, "clinicians", clinicianUid, "notes", noteId, "segments");
   const segmentDocs = await getDocs(segmentsRef);
+  const segments = segmentDocs.docs.map((s) => s.data() as AudioSegment);
+
+  // Best-effort delete of any audio still in Storage. In production the
+  // Cloud Function will have deleted these within seconds of STT; this
+  // is the safety net for step 3 (no Cloud Function yet) and for any
+  // segments that errored before STT cleanup.
+  await Promise.all(
+    segments.map(async (s) => {
+      if (!s.storage_path) return;
+      try {
+        await deleteObject(storageRef(storage, s.storage_path));
+      } catch (err) {
+        const code = (err as { code?: string }).code;
+        if (code !== "storage/object-not-found") {
+          console.warn("Storage delete (markFiled):", err);
+        }
+      }
+    }),
+  );
+
+  // Then the Firestore batch: segments, note, patient tag, audit row.
+  const batch = writeBatch(db);
   segmentDocs.forEach((s) => batch.delete(s.ref));
-
-  // Delete the note itself.
   batch.delete(doc(db, "clinicians", clinicianUid, "notes", noteId));
-
-  // Best-effort delete the patient tag (may not exist if never set).
-  // Batched deletes don't fail on missing docs in Firestore.
   batch.delete(doc(db, "clinicians", clinicianUid, "patient_tags", noteId));
 
-  // Audit event.
   const auditId = uuidv4();
   batch.set(doc(db, "audit", practiceId, "events", auditId), {
     event_type: "note_filed",
