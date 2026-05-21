@@ -1308,21 +1308,122 @@ The principal risks to project success:
 
 ---
 
-## 20. Document Status and Next Steps
+## 20. Document Status and Implementation Plan
 
-This specification represents the state of design as of 2026-05-19, after a multi-session planning conversation. It is intended to be a complete handover document for a developer (human or AI) picking up the project.
+This specification represents the state of design as of **2026-05-21**, after a multi-session planning conversation that produced the current web-only MVP framing, the picklist + voice input model, and the structured-note output model. It is intended to be a complete handover document for a developer (human or AI) picking up the project. The companion `CLAUDE.md` captures coding conventions, invariants, gotchas, and project structure; read both before writing code.
 
-**Immediate next steps for the implementer:**
+### 20.1 Architectural principle
 
-1. Read this spec and the companion `CLAUDE.md` end to end.
-2. Set up Firebase project (separate dev and prod).
-3. Sign up for Deepgram, generate API key, run a curl test to confirm.
-4. Sign up for Anthropic, generate API key.
-5. Build the data model in Firestore (collections, security rules).
-6. Build the mobile PWA capture surface.
-7. Build the `processRecording` Cloud Function with provider abstraction.
-8. Build the web compose surface, starting with the drafts list and review panel.
-9. Sit with the pilot dentist for an afternoon: build 3-5 templates, capture ~30 real recordings to use as the benchmark suite, refine keyword lists.
-10. Pilot in real clinical use for 2-4 weeks before iterating.
+**Build the infrastructure first. Treat templates, format strings, and LLM prompts as fluid configuration that flows through stable interfaces.**
 
-The companion `CLAUDE.md` document captures coding conventions, invariants, gotchas, and project structure that any contributor (human or AI) should read before writing code.
+The note format, the LLM prompt structure, the renderer grammar, and the per-template content are exactly the things that will churn as the pilot dentist gives feedback. Building these "well" before we have real templates locks in decisions before we know what real templates demand. The infrastructure surrounding them (auth, Firestore wiring, MediaRecorder, Storage upload, Cloud Function plumbing, Deepgram client, Anthropic client, status state machine, UI shell) is much more stable. Build that carefully; iterate freely on the volatile layer.
+
+### 20.2 Locked interfaces vs. fluid layers
+
+Worth getting right early, because changing later ripples through the whole system:
+
+- The **`FieldValue` shape** (see `shared/src/types.ts`): `{ picklist, qualifier, ai_confidence, source }`. The UI binds against this; the Cloud Function writes this; the renderer reads this; the LLM tool schema returns this.
+- The **state machine** (§9.4): `new → recording → transcribing → drafting → ready → edited → filed | error`.
+- The **function signatures** that span layers:
+  - `render(template, fieldValues) -> string` (in `shared/src/format.ts`)
+  - `buildPrompt(template, transcript, userSetValues) -> messages` (in `functions/src/prompts/build.ts`)
+  - `transcribe(audio, keywords) -> string` (in `functions/src/adapters/deepgram.ts`)
+  - `fillTemplate(prompt) -> fieldValues` (in `functions/src/adapters/anthropic.ts`)
+
+Designed to change every week without breaking anything else:
+
+- The **content** of the format string in any template
+- The **English** in the LLM system prompt
+- The **picklist options** on any template field
+- The **keyword list** for Deepgram boosting per template
+- The **few-shot examples** per template
+- The **renderer grammar features** (start dumb, add conditionals/filters when a real template demands them)
+
+### 20.3 Build sequence
+
+Sized assuming a single competent developer working full-time. Items in each step are roughly in dependency order.
+
+**Step 1 — Foundation** *(target: 1-2 days)*
+
+- Install Node 20 and `pnpm@9` if not already present.
+- `pnpm install` at the repo root; commit the resulting `pnpm-lock.yaml`.
+- Create a Firebase dev project on the **Blaze tier** (Cloud Functions 2nd gen requires pay-as-you-go billing; free quota covers MVP usage entirely). Replace the placeholder ID in `.firebaserc`.
+- Enable Firestore, Storage, Authentication (email/password provider), and Cloud Functions in the Firebase console.
+- Sign up for Deepgram, generate an API key, store via `firebase functions:secrets:set DEEPGRAM_API_KEY`.
+- Sign up for Anthropic, generate an API key, store via `firebase functions:secrets:set ANTHROPIC_API_KEY`. Request Zero Data Retention.
+- Copy `apps/web/.env.example` → `apps/web/.env` and fill in the Firebase web config.
+- Run `pnpm dev:web` to verify the placeholder loads; run `pnpm emulators` to verify the emulator suite starts.
+- Deploy the Firestore + Storage security rules; run a manual smoke test in the emulator (a clinician can read her own notes; she cannot read another's; tags cannot be listed).
+
+**Step 2 — Web UI shell with a toy template** *(target: 3-5 days)*
+
+- Sign-in screen using Firebase email/password Auth.
+- After first sign-in for the pilot dentist, the developer manually creates her `clinicians/{uid}` doc via the Firestore console with `practice_id` and `role: "admin"`. (Self-serve provisioning is v2.)
+- Notes list screen: real-time Firestore listener for `clinicians/{uid}/notes`, sorted by `created_at` descending. Tag fetched per-note from `patient_tags/{nid}` via individual `get()` calls (no list query — §7 in `CLAUDE.md`).
+- Note workspace screen: generic field-row component (picklist control + qualifier text input), live preview pane to the right, header with template name + tag + status, Copy Note button, Mark Filed button.
+- "+ New Note" action: client generates a v4 UUID, writes `notes/{nid}` with `status: "new"`, creates an empty `patient_tags/{nid}` doc the dentist can fill.
+- Mark Filed action: deletes `notes/{nid}` + its `segments/` subcollection + `patient_tags/{nid}`. Writes an `note_filed` event to `/audit/{pid}/events/`.
+- Toy template: a 3-field Firestore Template document (`tooth`, `restoration`, `notes`) hand-seeded once. Enough to exercise the UI.
+- Dumb renderer in `shared/src/format.ts`: 10-20 lines, iterates fields and emits `${label}: ${picklist}${qualifier ? ", " + qualifier : ""}`. Good enough to make the preview pane real.
+
+**Step 3 — Recording and upload** *(target: 2-3 days)*
+
+- Record button on the note workspace: requests mic permission, starts `MediaRecorder` with `{ echoCancellation: true, noiseSuppression: true, autoGainControl: true, sampleRate: 16000 }`.
+- Stop button: closes the recorder, creates `notes/{nid}/segments/{sid}` Firestore doc with `status: "uploading"`, uploads the blob to `notes/{nid}/segments/{sid}` in Cloud Storage with custom metadata `{ clinician_id, note_id, segment_id }`.
+- Important: trigger upload from a button-click handler, not a `useEffect`. React StrictMode runs effects twice in dev, which would create duplicate segments.
+- Status indicator on the note workspace following the state machine.
+- Augment and Re-record (clean) actions wired to the right state transitions.
+- Audit log: `note_created` event written on first segment upload.
+
+**Step 4 — Cloud Function pipeline** *(target: 3-5 days)*
+
+- Fill in `functions/src/processSegment.ts` per SPEC §10.3. Production-quality plumbing: idempotency check, error handling, status transitions, audio deletion after STT.
+- Deepgram adapter in `functions/src/adapters/deepgram.ts`: thin wrapper around `@deepgram/sdk`, accepts audio buffer + keyword list, returns transcript.
+- Anthropic adapter in `functions/src/adapters/anthropic.ts`: thin wrapper around `@anthropic-ai/sdk`, accepts a messages array + tool schema, returns the tool-use payload.
+- Prompt builder in `functions/src/prompts/build.ts`: assembles system prompt (English description of what to do, "do not invent" guardrails), tool schema (generated from the Template's field definitions), few-shot examples, and the user message (transcript + already-set picklist values). Initial English content is a stub; this is the fluid layer.
+- Schema generator in `functions/src/prompts/schema.ts`: converts a Template to a JSON schema for the LLM tool.
+- Merge logic: for each field returned by the AI, write to `notes/{nid}.field_values[name]` only if the existing value has `source != "user"`. Update `final_note_text` by calling the renderer with the merged values.
+- **Concurrency: serialize segments per note.** A second segment that arrives while the first is still `transcribing` or `drafting` is held with `status: "queued"`. `processSegment` checks for a queued segment after writing the parent note as `ready` and re-triggers itself.
+- Error path: any failure writes `status: "error"` and a human-readable `error_message` to the note. Schema-violation errors retry once with a corrective prompt before failing.
+
+**Step 5 — First end-to-end test** *(target: 1 day)*
+
+- Sign in, create a new note with the toy template, dictate something short, watch the pipeline run.
+- **Success criterion: all the pipes work** — audio uploads, transcript appears, AI fills the toy template, preview updates, Copy Note puts the right text on the clipboard, Mark Filed deletes everything cleanly. Output quality is *not* a success criterion at this step; it will be wrong, and that's fine.
+- Developer-only demo. Do **not** show this to the dentist — the toy template will look broken, and the perceived-quality bar is what matters.
+
+**Step 6 — Iterate the fluid layer with the dentist** *(target: 2-4 weeks)*
+
+- Sit with the pilot dentist for an afternoon. Capture her ~10 real templates as Firestore documents: fields, picklist options, format strings, dental keyword lists.
+- For each template, record 2-3 example dictations and hand-grade the ideal field values. Drop them in `benchmarks/recordings/{template_id}/` and `benchmarks/expected/{template_id}/`. Add the recordings to the few-shot examples in each Template document.
+- Run a real recording through the pipeline. Compare output to her expected note. Tune the LLM prompt, add keywords to Deepgram, refine few-shot examples until accuracy is acceptable.
+- Add format-string features (conditionals, filters, sub-paths per SPEC §11.3) only when a real template requires them. Start small.
+- Build the minimal form-based admin UI for editing templates (admin role only). Practice provider/assistant lists.
+- Implement the benchmark runner in `benchmarks/runner.ts` — runs the suite, reports per-field accuracy. Gate every prompt or model change on a green benchmark run.
+
+**Step 7 — Polish for pilot** *(target: 1-2 weeks)*
+
+- Scheduled Cloud Function for 30-day auto-delete of un-filed notes.
+- MFA (TOTP) enrollment flow in the auth screen.
+- Error state UI: surface `note.status === "error"` with the error message and a retry button.
+- Sentry integration in both web app and functions.
+- BetterStack uptime monitoring on Firebase Hosting.
+- Anthropic + Deepgram usage alerts at 80% of monthly budget.
+- Audit log read view (admin-only, optional in MVP).
+- Production Firebase project (separate from dev). Deploy. Smoke test with the dentist's real account.
+- Pilot in clinical use for 2-4 weeks before any further iteration.
+
+### 20.4 Pressure-test findings
+
+Worth knowing before you start; not blockers, but easy to trip on.
+
+1. **Firebase Blaze tier is required** for Cloud Functions 2nd gen, even with free quota. The billing account must exist.
+2. **API key procurement isn't free time.** Deepgram and Anthropic both require signup with payment method even though credits are available; budget ~30 min each.
+3. **Storage custom metadata is fiddly.** The security rule requires `request.resource.metadata.clinician_id == request.auth.uid`. The JS SDK syntax is `uploadBytes(ref, blob, { customMetadata: { clinician_id: uid, note_id: nid, segment_id: sid } })`. Easy to omit; fails silently with permission denied.
+4. **React StrictMode double-effects.** Triggering uploads from `useEffect` produces duplicate segments in dev. Trigger from explicit user-action handlers.
+5. **Anthropic prompt-caching cache_control placement** must be on the right content blocks for caching to engage. Get it wrong, no caching, no cost savings. Verify cache_hit metrics on early calls.
+6. **The augment-segment concurrency case is real** — see step 4. Serialize per note. If you skip this, two near-simultaneous segments produce non-deterministic final state.
+7. **Clinician provisioning is manual in MVP.** First sign-in does not create a `clinicians/{uid}` doc. Developer creates it via the Firestore console. Stick this on a checklist or step 2 stalls when the dentist actually tries to sign in.
+8. **The toy template in step 5 is developer-only.** Showing the dentist a deliberately-stub render will burn perceived-product-quality goodwill. Wait until step 6 templates land before any user demo.
+9. **Most engineering time eventually goes to step 6** (prompt + few-shot tuning), not steps 1-4. Plan accordingly. There is no clean "done" milestone on AI accuracy — it is continuous tuning informed by the benchmark suite.
+10. **iOS Safari `MediaRecorder` quirks** are deferred to v1.1 (mobile PWA). Workstation Chrome/Edge/Firefox covers MVP without special handling.
