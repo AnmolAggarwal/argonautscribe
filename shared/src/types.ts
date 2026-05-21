@@ -201,6 +201,15 @@ export interface Clinician {
   created_at: FirestoreTimestamp;
 }
 
+// ---------- Practice ----------
+
+export interface Practice {
+  practice_id: PracticeId;
+  /** Display name, e.g. "Argonaut Dental". */
+  name: string;
+  created_at: FirestoreTimestamp;
+}
+
 // ---------- Staff lists (practice-scoped) ----------
 
 export interface Provider {

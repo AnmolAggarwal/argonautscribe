@@ -30,7 +30,29 @@ pnpm typecheck            # Typecheck all packages
 pnpm lint                 # Lint all packages
 ```
 
-The Firebase project ID in `.firebaserc` is a placeholder (`argonautscribe-dev`); replace it with your dev project before running emulators or deploying. Copy `apps/web/.env.example` to `apps/web/.env` and fill in your Firebase config.
+Copy `apps/web/.env.example` to `apps/web/.env` and fill in your Firebase web config (Project settings → Your apps).
+
+## Seeding the dev Firestore
+
+The web app expects a `practice` doc and a toy template to exist in Firestore. The seed script creates both:
+
+```sh
+# 1. Download a service-account key:
+#    Firebase Console → Project Settings → Service accounts → Generate new private key.
+#    Save to repo root as service-account-dev.json (gitignored).
+
+# 2. Point ADC at the key and run the seed:
+export GOOGLE_APPLICATION_CREDENTIALS=./service-account-dev.json
+pnpm seed
+```
+
+After signing into the web app once (which creates a Firebase Auth user), grab your UID from Firebase Console → Authentication and run:
+
+```sh
+pnpm seed --clinician <your-uid>
+```
+
+This creates `clinicians/<your-uid>` with `role: "admin"` so you can edit templates.
 
 ## Privacy reminder
 
