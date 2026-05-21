@@ -1,11 +1,23 @@
+import { Routes, Route, Navigate } from "react-router-dom";
+import { AuthProvider, RequireClinician } from "./lib/auth";
+import { SignIn } from "./screens/SignIn";
+import { NotesList } from "./screens/NotesList";
+
 export function App() {
   return (
-    <main style={{ fontFamily: "system-ui, -apple-system, sans-serif", padding: "2rem" }}>
-      <h1>ArgonautScribe</h1>
-      <p>
-        Web app — bootstrap placeholder. See <code>SPEC.md</code> for the full design and{" "}
-        <code>CLAUDE.md</code> for working context.
-      </p>
-    </main>
+    <AuthProvider>
+      <Routes>
+        <Route path="/sign-in" element={<SignIn />} />
+        <Route
+          path="/"
+          element={
+            <RequireClinician>
+              <NotesList />
+            </RequireClinician>
+          }
+        />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </AuthProvider>
   );
 }

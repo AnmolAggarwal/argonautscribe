@@ -6,8 +6,8 @@
     "outDir": "dist",
     "rootDir": "src",
     "types": ["vite/client"],
-    "noEmit": true
+    "noEmit": true,
+    "allowImportingTsExtensions": false
   },
-  "include": ["src"],
-  "references": [{ "path": "../../shared" }]
+  "include": ["src"]
 }
