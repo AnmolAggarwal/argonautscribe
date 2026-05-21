@@ -14,6 +14,14 @@ functions/lib/
 .env.*.local
 !.env.example
 
+# API keys — NEVER commit. Use Firebase Secret Manager (functions) or .env (web).
+*key.txt
+*-key.txt
+*.key
+*api-key*
+deepgramkey.txt
+anthropickey.txt
+
 # Logs
 *.log
 npm-debug.log*
