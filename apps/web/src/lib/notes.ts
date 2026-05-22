@@ -17,8 +17,9 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { ref as storageRef, deleteObject } from "firebase/storage";
+import { httpsCallable } from "firebase/functions";
 import type { AudioSegment, FieldValue, Template } from "@argonaut/shared";
-import { db, storage } from "./firebase";
+import { db, functions, storage } from "./firebase";
 
 /** "2026-05-21" — day-level only per the PHI invariants (SPEC §12.3). */
 function todayIso(): string {
@@ -170,4 +171,23 @@ export async function markFiled(
 export async function discardNote(clinicianUid: string, noteId: string): Promise<void> {
   await deleteDoc(doc(db, "clinicians", clinicianUid, "notes", noteId));
   await deleteDoc(doc(db, "clinicians", clinicianUid, "patient_tags", noteId)).catch(() => {});
+}
+
+interface GenerateNoteResult {
+  ok: true;
+  status: "ready";
+  segmentsTranscribed: number;
+  finalNoteText: string;
+}
+
+/**
+ * Invoke the generateNote Cloud Function. The note must have at least
+ * one audio segment and must not already be in `generating` or `filed`.
+ * The function does its own state transitions on the note doc; the
+ * UI just needs to observe note.status via its existing listener.
+ */
+export async function callGenerateNote(noteId: string): Promise<GenerateNoteResult> {
+  const fn = httpsCallable<{ noteId: string }, GenerateNoteResult>(functions, "generateNote");
+  const res = await fn({ noteId });
+  return res.data;
 }

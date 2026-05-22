@@ -1,0 +1,95 @@
+/**
+ * Thin Anthropic client wrapper.
+ *
+ * One messages.create call with tool-use forced to the `fill_note`
+ * tool. Returns the parsed field_values from the tool_use block.
+ * cache_control is applied to the system prompt and tools to engage
+ * Anthropic's prompt caching on the stable per-template content.
+ *
+ * Retry on schema violation lives in the caller (generateNote), not
+ * here — keeps this adapter side-effect-free and easy to test.
+ */
+
+import Anthropic from "@anthropic-ai/sdk";
+import type { FieldValue } from "../types";
+
+interface FillTemplateArgs {
+  apiKey: string;
+  model: string;
+  systemPrompt: string;
+  toolSchema: unknown;
+  fewShotMessages: Array<{ role: "user" | "assistant"; content: string }>;
+  userMessage: string;
+  maxTokens?: number;
+}
+
+interface FillResult {
+  fieldValues: Record<string, FieldValue>;
+  /** For observability — caller can log these. */
+  usage?: {
+    input_tokens?: number;
+    output_tokens?: number;
+    cache_creation_input_tokens?: number;
+    cache_read_input_tokens?: number;
+  };
+}
+
+export async function fillTemplateViaClaude(args: FillTemplateArgs): Promise<FillResult> {
+  const {
+    apiKey,
+    model,
+    systemPrompt,
+    toolSchema,
+    fewShotMessages,
+    userMessage,
+    maxTokens = 2000,
+  } = args;
+
+  const client = new Anthropic({ apiKey });
+
+  // The cache_control field is documented but not yet in this SDK
+  // version's TS types — passed through to the API verbatim. Verify
+  // cache_hit metrics in production; upgrade SDK to drop these casts.
+  const response = await client.messages.create({
+    model,
+    max_tokens: maxTokens,
+    system: [
+      {
+        type: "text",
+        text: systemPrompt,
+        cache_control: { type: "ephemeral" },
+      } as Anthropic.TextBlockParam,
+    ],
+    tools: [
+      {
+        name: "fill_note",
+        description:
+          "Return the structured field_values extracted from the dental encounter transcript.",
+        input_schema: toolSchema as Anthropic.Tool.InputSchema,
+        cache_control: { type: "ephemeral" },
+      } as Anthropic.Tool,
+    ],
+    tool_choice: { type: "tool", name: "fill_note" },
+    messages: [
+      ...fewShotMessages.map((m) => ({ role: m.role, content: m.content })),
+      { role: "user" as const, content: userMessage },
+    ],
+  });
+
+  const toolUseBlock = response.content.find(
+    (block): block is Anthropic.ToolUseBlock => block.type === "tool_use",
+  );
+  if (!toolUseBlock) {
+    throw new Error("Claude returned no tool_use block");
+  }
+
+  const input = toolUseBlock.input as { field_values?: Record<string, FieldValue> } | undefined;
+  if (!input || typeof input !== "object" || !input.field_values) {
+    throw new Error("Claude tool_use payload missing field_values");
+  }
+
+  return {
+    fieldValues: input.field_values,
+    usage: response.usage as FillResult["usage"],
+  };
+}

@@ -2,4 +2,4 @@ import { initializeApp } from "firebase-admin/app";
 
 initializeApp();
 
-export { processSegment } from "./processSegment";
+export { generateNote } from "./generate-note";

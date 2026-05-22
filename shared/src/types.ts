@@ -33,11 +33,25 @@ export type AssistantId = string;
  *  - filed        : Terminal (note doc is then hard-deleted, audit row written).
  *  - error        : Pipeline error; see error_message on the note.
  */
+/**
+ * Note lifecycle status. The active set under the on-demand "Generate"
+ * model (SPEC §20.3 step 4) is:
+ *   new        — just created, possibly with recorded audio, no AI fill yet
+ *   generating — generateNote Cloud Function is running (STT + LLM)
+ *   ready      — AI fill complete, awaiting dentist review
+ *   filed      — terminal; the note doc is hard-deleted after this status flips
+ *   error      — pipeline failure; see note.error_message
+ *
+ * The other variants (recording, transcribing, drafting, edited) are
+ * retained for forward/back compatibility but are not written by the
+ * current pipeline.
+ */
 export type NoteStatus =
   | "new"
   | "recording"
   | "transcribing"
   | "drafting"
+  | "generating"
   | "ready"
   | "edited"
   | "filed"

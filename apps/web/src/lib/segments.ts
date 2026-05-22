@@ -48,10 +48,11 @@ export async function listSegments(
 /**
  * Create a segment doc + upload its audio. Returns the new segment_id.
  *
- * The note's status is moved to "transcribing" once upload completes —
- * the Cloud Function (step 4) takes ownership from there. Without the
- * function the segment sits at "uploading" and the note sits at
- * "transcribing" indefinitely; that's expected for step 3 testing.
+ * Under the on-demand generate model (SPEC §20 / step 4), upload does
+ * NOT trigger STT. The segment sits at status: "done"-but-with-no-
+ * transcript_chunk-yet (we use "uploading" → "done" with empty chunk
+ * to mean "audio uploaded, awaiting Generate"). The dentist clicks
+ * Generate when ready; the Cloud Function transcribes from there.
  */
 export async function createSegmentAndUpload(args: {
   clinicianUid: string;
@@ -99,8 +100,10 @@ export async function createSegmentAndUpload(args: {
     },
   });
 
-  // Move the note to "transcribing" — the Cloud Function picks up from here.
-  await setNoteStatus(clinicianUid, noteId, "transcribing");
+  // Flip segment to "uploading" -> visibly-uploaded by clearing status
+  // back to "uploading" with the bytes in place. The Cloud Function
+  // moves it through "transcribing" -> "done" when Generate runs.
+  // Note status itself is NOT touched here; Generate sets generating/ready.
 
   return segmentId;
 }
