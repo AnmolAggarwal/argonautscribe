@@ -571,7 +571,11 @@ A new function comes with new tests. A modified function comes with updated test
 
 If a core invariant in §2 changes through a deliberate design decision (recorded in `docs/ADR/`), update §2 of this document. CLAUDE.md must stay accurate; outdated instructions are worse than no instructions.
 
-### 12.8 If unsure, ask
+### 12.8 Never make live API calls without explicit permission
+
+Do NOT make calls to external paid APIs (Anthropic, Deepgram, OpenAI) from scripts, curl, or test code unless the user explicitly asks you to. These calls cost real money. If the user wants to test an API integration, prepare the script/command and let them run it manually, or ask before executing.
+
+### 12.9 If unsure, ask
 
 Better to ask a clarifying question than to guess at user intent. Especially for: privacy-relevant changes, schema changes that affect Firestore documents in production, prompt changes that affect LLM accuracy.
 

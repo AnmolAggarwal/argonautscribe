@@ -94,42 +94,69 @@ export function NotesList() {
     }
   }
 
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayNotes = notes.filter((n) => n.date_iso === todayIso);
+  const olderNotes = notes.filter((n) => n.date_iso !== todayIso);
+
   return (
     <main
       style={{
-        maxWidth: 800,
-        margin: "2rem auto",
-        padding: "0 1rem",
-        fontFamily: "system-ui",
+        maxWidth: 720,
+        margin: "0 auto",
+        padding: "2rem 1.5rem",
+        fontFamily: "'Inter', 'SF Pro Display', system-ui, sans-serif",
+        color: "#1a1a1a",
       }}
     >
+      {/* Header */}
       <header
         style={{
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          marginBottom: "1.5rem",
-          borderBottom: "1px solid #eee",
-          paddingBottom: "1rem",
+          marginBottom: "2rem",
         }}
       >
-        <h1 style={{ margin: 0 }}>Notes</h1>
-        <div style={{ fontSize: "0.9rem", color: "#666" }}>
-          <span>{clinician?.display_name ?? user?.email}</span>
-          <button
-            onClick={() => void signOut()}
-            style={{ marginLeft: "1rem", padding: "0.4rem 0.75rem" }}
-          >
-            Sign out
-          </button>
+        <div>
+          <h1 style={{ margin: 0, fontSize: "1.6rem", fontWeight: 700, letterSpacing: "-0.02em" }}>
+            Argonaut Scribe
+          </h1>
+          <p style={{ margin: "0.25rem 0 0", fontSize: "0.85rem", color: "#888" }}>
+            {clinician?.display_name ?? user?.email}
+          </p>
         </div>
+        <button
+          onClick={() => void signOut()}
+          style={{
+            padding: "0.4rem 0.9rem",
+            fontSize: "0.8rem",
+            border: "1px solid #ddd",
+            borderRadius: 6,
+            background: "white",
+            color: "#666",
+            cursor: "pointer",
+          }}
+        >
+          Sign out
+        </button>
       </header>
 
-      <div style={{ position: "relative", display: "inline-block", marginBottom: "1.5rem" }}>
+      {/* New Note button */}
+      <div style={{ position: "relative", display: "inline-block", marginBottom: "1.75rem" }}>
         <button
           onClick={handleNewNoteClick}
           disabled={creating}
-          style={{ padding: "0.6rem 1rem", cursor: creating ? "wait" : "pointer" }}
+          style={{
+            padding: "0.65rem 1.25rem",
+            fontSize: "0.9rem",
+            fontWeight: 600,
+            border: "none",
+            borderRadius: 8,
+            background: creating ? "#ccc" : "#2563eb",
+            color: "white",
+            cursor: creating ? "wait" : "pointer",
+            boxShadow: "0 1px 3px rgba(37,99,235,0.3)",
+          }}
         >
           {creating ? "Creating…" : "+ New Note"}
         </button>
@@ -140,24 +167,28 @@ export function NotesList() {
               position: "absolute",
               top: "100%",
               left: 0,
-              marginTop: 4,
+              marginTop: 6,
               background: "white",
-              border: "1px solid #ddd",
-              borderRadius: 4,
-              boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
+              border: "1px solid #e5e7eb",
+              borderRadius: 10,
+              boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
               zIndex: 10,
-              minWidth: 240,
+              minWidth: 260,
+              overflow: "hidden",
             }}
           >
             <div
               style={{
-                padding: "0.5rem 0.75rem",
-                fontSize: "0.8rem",
-                color: "#888",
-                borderBottom: "1px solid #eee",
+                padding: "0.6rem 0.85rem",
+                fontSize: "0.75rem",
+                fontWeight: 600,
+                color: "#999",
+                textTransform: "uppercase",
+                letterSpacing: "0.05em",
+                borderBottom: "1px solid #f0f0f0",
               }}
             >
-              Choose a template
+              Choose template
             </div>
             {templates.map((t) => (
               <button
@@ -167,13 +198,13 @@ export function NotesList() {
                   display: "block",
                   width: "100%",
                   textAlign: "left",
-                  padding: "0.6rem 0.75rem",
+                  padding: "0.7rem 0.85rem",
                   border: "none",
                   background: "transparent",
                   cursor: "pointer",
                   fontSize: "0.9rem",
                 }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "#f5f5f5")}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "#f7f8fa")}
                 onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
               >
                 {t.name}
@@ -184,14 +215,14 @@ export function NotesList() {
               style={{
                 display: "block",
                 width: "100%",
-                textAlign: "left",
-                padding: "0.5rem 0.75rem",
+                textAlign: "center",
+                padding: "0.55rem 0.85rem",
                 border: "none",
-                borderTop: "1px solid #eee",
+                borderTop: "1px solid #f0f0f0",
                 background: "transparent",
                 cursor: "pointer",
                 fontSize: "0.8rem",
-                color: "#888",
+                color: "#999",
               }}
             >
               Cancel
@@ -200,32 +231,180 @@ export function NotesList() {
         )}
       </div>
 
+      {/* Empty state */}
       {notes.length === 0 ? (
-        <p style={{ color: "#666" }}>No notes yet. Click "+ New Note" to create one.</p>
+        <div
+          style={{
+            textAlign: "center",
+            padding: "4rem 1rem",
+            color: "#aaa",
+          }}
+        >
+          <div style={{ fontSize: "2.5rem", marginBottom: "0.75rem" }}>No notes yet</div>
+          <p style={{ fontSize: "0.95rem", margin: 0 }}>
+            Click <strong>+ New Note</strong> to start your first note.
+          </p>
+        </div>
       ) : (
-        <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-          {notes.map((n) => (
-            <li key={n.note_id} style={{ borderBottom: "1px solid #eee" }}>
-              <Link
-                to={`/notes/${n.note_id}`}
+        <>
+          {/* Today's notes */}
+          {todayNotes.length > 0 && (
+            <section style={{ marginBottom: "2rem" }}>
+              <div
                 style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 2fr 100px 100px",
-                  gap: "1rem",
-                  padding: "0.75rem 0.5rem",
-                  textDecoration: "none",
-                  color: "inherit",
+                  fontSize: "0.75rem",
+                  fontWeight: 600,
+                  color: "#999",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.05em",
+                  marginBottom: "0.6rem",
                 }}
               >
-                <span style={{ fontWeight: 500 }}>{templateNames[n.template_id] ?? n.template_id}</span>
-                <span style={{ color: "#666" }}>{tags[n.note_id] || "(no tag)"}</span>
-                <span style={{ color: "#888", fontSize: "0.85rem" }}>{n.status}</span>
-                <span style={{ color: "#888", fontSize: "0.85rem" }}>{n.date_iso}</span>
-              </Link>
-            </li>
-          ))}
-        </ul>
+                Today &middot; {todayNotes.length} note{todayNotes.length === 1 ? "" : "s"}
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                {todayNotes.map((n) => (
+                  <NoteCard
+                    key={n.note_id}
+                    note={n}
+                    tag={tags[n.note_id]}
+                    templateName={templateNames[n.template_id] ?? n.template_id}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Older notes */}
+          {olderNotes.length > 0 && (
+            <section>
+              <div
+                style={{
+                  fontSize: "0.75rem",
+                  fontWeight: 600,
+                  color: "#999",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.05em",
+                  marginBottom: "0.6rem",
+                }}
+              >
+                Earlier
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                {olderNotes.map((n) => (
+                  <NoteCard
+                    key={n.note_id}
+                    note={n}
+                    tag={tags[n.note_id]}
+                    templateName={templateNames[n.template_id] ?? n.template_id}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+        </>
       )}
     </main>
+  );
+}
+
+// --- Status badge styling ---
+
+const STATUS_STYLES: Record<string, { bg: string; color: string; label: string }> = {
+  new:        { bg: "#f3f4f6", color: "#6b7280", label: "New" },
+  generating: { bg: "#dbeafe", color: "#2563eb", label: "Generating" },
+  ready:      { bg: "#dcfce7", color: "#16a34a", label: "Ready" },
+  edited:     { bg: "#fef9c3", color: "#a16207", label: "Edited" },
+  error:      { bg: "#fee2e2", color: "#dc2626", label: "Error" },
+  filed:      { bg: "#f3f4f6", color: "#9ca3af", label: "Filed" },
+};
+
+function StatusBadge({ status }: { status: string }) {
+  const s = STATUS_STYLES[status] ?? { bg: "#f3f4f6", color: "#6b7280", label: status };
+  return (
+    <span
+      style={{
+        display: "inline-block",
+        padding: "0.15rem 0.55rem",
+        fontSize: "0.7rem",
+        fontWeight: 600,
+        borderRadius: 999,
+        background: s.bg,
+        color: s.color,
+        textTransform: "capitalize",
+        whiteSpace: "nowrap",
+      }}
+    >
+      {s.label}
+    </span>
+  );
+}
+
+// --- Note card ---
+
+function NoteCard({
+  note,
+  tag,
+  templateName,
+}: {
+  note: Note;
+  tag: string | undefined;
+  templateName: string;
+}) {
+  const displayTag = tag || "Untitled";
+  const hasTag = Boolean(tag);
+
+  return (
+    <Link
+      to={`/notes/${note.note_id}`}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: "1rem",
+        padding: "0.85rem 1rem",
+        background: "white",
+        border: "1px solid #e5e7eb",
+        borderRadius: 10,
+        textDecoration: "none",
+        color: "inherit",
+        transition: "box-shadow 0.15s, border-color 0.15s",
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.borderColor = "#c7d0dd";
+        e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.06)";
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.borderColor = "#e5e7eb";
+        e.currentTarget.style.boxShadow = "none";
+      }}
+    >
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div
+          style={{
+            fontWeight: 600,
+            fontSize: "0.95rem",
+            color: hasTag ? "#1a1a1a" : "#aaa",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            fontStyle: hasTag ? "normal" : "italic",
+          }}
+        >
+          {displayTag}
+        </div>
+        <div
+          style={{
+            fontSize: "0.8rem",
+            color: "#999",
+            marginTop: "0.15rem",
+          }}
+        >
+          {templateName} &middot; {note.date_iso}
+        </div>
+      </div>
+
+      <StatusBadge status={note.status} />
+    </Link>
   );
 }
