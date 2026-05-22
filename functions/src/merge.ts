@@ -27,8 +27,13 @@ export function mergeFieldValues(
     const prior = existing[name];
 
     if (prior && prior.source === "user") {
-      // User explicitly set this — never overwrite.
-      continue;
+      // User explicitly set this — never overwrite, UNLESS the user
+      // cleared the field entirely (picklist null + qualifier empty).
+      // A cleared user field means "let AI fill this again".
+      const cleared =
+        (prior.picklist === null || prior.picklist === "") &&
+        (!prior.qualifier || prior.qualifier.trim() === "");
+      if (!cleared) continue;
     }
 
     result[name] = {

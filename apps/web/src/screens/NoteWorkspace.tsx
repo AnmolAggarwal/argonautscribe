@@ -204,6 +204,35 @@ export function NoteWorkspace() {
         noteStatus={note.status}
       />
 
+      {note.transcript && (
+        <details
+          open
+          style={{
+            marginBottom: "1.5rem",
+            background: "#f9f9f9",
+            border: "1px solid #eee",
+            borderRadius: 4,
+            padding: "0.75rem 1rem",
+          }}
+        >
+          <summary style={{ cursor: "pointer", fontSize: "0.9rem", fontWeight: 500, color: "#555" }}>
+            Transcript
+          </summary>
+          <p
+            style={{
+              marginTop: "0.5rem",
+              marginBottom: 0,
+              whiteSpace: "pre-wrap",
+              fontSize: "0.85rem",
+              lineHeight: 1.6,
+              color: "#444",
+            }}
+          >
+            {note.transcript}
+          </p>
+        </details>
+      )}
+
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2rem" }}>
         <section>
           <h3 style={{ marginTop: 0 }}>Fields</h3>

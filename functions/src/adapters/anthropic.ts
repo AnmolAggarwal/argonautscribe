@@ -47,6 +47,35 @@ export async function fillTemplateViaClaude(args: FillTemplateArgs): Promise<Fil
 
   const client = new Anthropic({ apiKey });
 
+  // Retry with exponential backoff for transient 529 (overloaded) errors.
+  const MAX_RETRIES = 3;
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    if (attempt > 0) {
+      const delayMs = Math.min(1000 * 2 ** attempt, 8000); // 2s, 4s, 8s
+      await new Promise((r) => setTimeout(r, delayMs));
+    }
+    try {
+      return await callClaude(client, { model, systemPrompt, toolSchema, fewShotMessages, userMessage, maxTokens });
+    } catch (err) {
+      lastError = err;
+      const status = (err as { status?: number }).status;
+      if (status === 529 || status === 503 || status === 500) {
+        // Retryable — continue loop
+        continue;
+      }
+      throw err; // Non-retryable — bail immediately
+    }
+  }
+  throw lastError;
+}
+
+async function callClaude(
+  client: Anthropic,
+  args: { model: string; systemPrompt: string; toolSchema: unknown; fewShotMessages: Array<{ role: "user" | "assistant"; content: string }>; userMessage: string; maxTokens: number },
+): Promise<FillResult> {
+  const { model, systemPrompt, toolSchema, fewShotMessages, userMessage, maxTokens } = args;
+
   // The cache_control field is documented but not yet in this SDK
   // version's TS types — passed through to the API verbatim. Verify
   // cache_hit metrics in production; upgrade SDK to drop these casts.

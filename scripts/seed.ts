@@ -27,6 +27,10 @@ import {
   TOY_TEMPLATE_ID,
   TOY_TEMPLATE,
 } from "../shared/src/fixtures/toy-template";
+import {
+  CEMENTATION_TEMPLATE_ID,
+  CEMENTATION_TEMPLATE,
+} from "../shared/src/fixtures/cementation-template";
 
 const projectId = process.env.GCLOUD_PROJECT ?? "argonautscribe";
 
@@ -79,6 +83,23 @@ async function seedTemplate(): Promise<void> {
   console.log(`  versions/${TOY_TEMPLATE.version} — archived`);
 }
 
+async function seedCementationTemplate(): Promise<void> {
+  const ref = db.doc(`practices/${TOY_PRACTICE_ID}/templates/${CEMENTATION_TEMPLATE_ID}`);
+
+  const docData = {
+    ...CEMENTATION_TEMPLATE,
+    created_at: FieldValue.serverTimestamp(),
+    updated_at: FieldValue.serverTimestamp(),
+  };
+
+  await ref.set(docData);
+  console.log(`practices/${TOY_PRACTICE_ID}/templates/${CEMENTATION_TEMPLATE_ID} — written (v${CEMENTATION_TEMPLATE.version})`);
+
+  const versionRef = ref.collection("versions").doc(String(CEMENTATION_TEMPLATE.version));
+  await versionRef.set(docData);
+  console.log(`  versions/${CEMENTATION_TEMPLATE.version} — archived`);
+}
+
 async function seedClinician(uid: string): Promise<void> {
   const ref = db.doc(`clinicians/${uid}`);
   const snap = await ref.get();
@@ -101,6 +122,7 @@ async function main(): Promise<void> {
   console.log(`Seeding project: ${projectId}\n`);
   await seedPractice();
   await seedTemplate();
+  await seedCementationTemplate();
 
   const { clinicianUid } = parseArgs();
   if (clinicianUid) {

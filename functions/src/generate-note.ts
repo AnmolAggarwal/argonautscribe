@@ -55,6 +55,7 @@ export const generateNote = onCall<GenerateNoteRequest, Promise<GenerateNoteResp
     region: "us-central1",
     memory: "512MiB",
     timeoutSeconds: 180,
+    cors: true,
     secrets: [DEEPGRAM_KEY, ANTHROPIC_KEY],
   },
   async (request) => {
@@ -136,14 +137,41 @@ export const generateNote = onCall<GenerateNoteRequest, Promise<GenerateNoteResp
 
         const storagePath = seg.storage_path as string | null;
         if (!storagePath) {
-          throw new Error(
-            `Segment ${segDoc.id} has no audio (storage_path null) and no transcript.`,
-          );
+          // No audio and no transcript. This can happen if:
+          //   - A previous Generate partially succeeded (audio deleted, STT returned empty)
+          //   - The upload never completed but the segment doc was created
+          // Mark as error and skip — don't block the rest of the note.
+          logger.warn("Skipping segment with no audio and no transcript", {
+            noteId,
+            segmentId: segDoc.id,
+            status: seg.status,
+          });
+          await segDoc.ref.update({
+            status: "error",
+            error_message: "No audio file available for transcription",
+          });
+          continue;
+        }
+
+        // Verify the file actually exists in Storage before downloading.
+        const file = bucket.file(storagePath);
+        const [exists] = await file.exists();
+        if (!exists) {
+          logger.warn("Segment audio file missing from Storage", {
+            noteId,
+            segmentId: segDoc.id,
+            storagePath,
+          });
+          await segDoc.ref.update({
+            status: "error",
+            storage_path: null,
+            error_message: "Audio file not found in storage",
+          });
+          continue;
         }
 
         await segDoc.ref.update({ status: "transcribing" });
 
-        const file = bucket.file(storagePath);
         const [audio] = await file.download();
         const segContentType =
           typeof seg.content_type === "string" ? (seg.content_type as string) : null;
