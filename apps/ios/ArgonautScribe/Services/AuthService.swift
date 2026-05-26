@@ -17,13 +17,15 @@ final class AuthService {
 
     init() {
         authHandle = Auth.auth().addStateDidChangeListener { [weak self] _, user in
-            self?.user = user
-            if let user {
-                self?.listenToClinician(uid: user.uid)
-            } else {
-                self?.clinicianListener?.remove()
-                self?.clinician = nil
-                self?.isLoading = false
+            Task { @MainActor [weak self] in
+                self?.user = user
+                if let user {
+                    self?.listenToClinician(uid: user.uid)
+                } else {
+                    self?.clinicianListener?.remove()
+                    self?.clinician = nil
+                    self?.isLoading = false
+                }
             }
         }
     }
@@ -39,13 +41,15 @@ final class AuthService {
         clinicianListener?.remove()
         let ref = Firestore.firestore().document("clinicians/\(uid)")
         clinicianListener = ref.addSnapshotListener { [weak self] snap, error in
-            if let error {
-                print("Clinician listener error: \(error.localizedDescription)")
+            Task { @MainActor [weak self] in
+                if let error {
+                    print("Clinician listener error: \(error.localizedDescription)")
+                    self?.isLoading = false
+                    return
+                }
+                self?.clinician = try? snap?.data(as: Clinician.self)
                 self?.isLoading = false
-                return
             }
-            self?.clinician = try? snap?.data(as: Clinician.self)
-            self?.isLoading = false
         }
     }
 

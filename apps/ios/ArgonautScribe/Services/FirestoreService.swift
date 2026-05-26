@@ -39,8 +39,8 @@ enum FirestoreService {
             "field_values": [String: Any](),
             "final_note_text": NSNull(),
             "error_message": NSNull(),
-            "created_at": FieldValue.serverTimestamp(),
-            "updated_at": FieldValue.serverTimestamp(),
+            "created_at": FirebaseFirestore.FieldValue.serverTimestamp(),
+            "updated_at": FirebaseFirestore.FieldValue.serverTimestamp(),
         ]
 
         try await noteRef(clinicianUid: clinicianUid, noteId: noteId).setData(data)
@@ -61,7 +61,7 @@ enum FirestoreService {
             "field_values.\(fieldName)": value,
             "final_note_text": finalNoteText,
             "status": "edited",
-            "updated_at": FieldValue.serverTimestamp(),
+            "updated_at": FirebaseFirestore.FieldValue.serverTimestamp(),
         ])
     }
 
@@ -75,7 +75,7 @@ enum FirestoreService {
         try await patientTagRef(clinicianUid: clinicianUid, noteId: noteId).setData([
             "note_id": noteId,
             "tag": tag,
-            "created_at": FieldValue.serverTimestamp(),
+            "created_at": FirebaseFirestore.FieldValue.serverTimestamp(),
         ], merge: true)
     }
 
@@ -112,7 +112,7 @@ enum FirestoreService {
             "content_type": "audio/m4a",
             "transcript_chunk": NSNull(),
             "error_message": NSNull(),
-            "created_at": FieldValue.serverTimestamp(),
+            "created_at": FirebaseFirestore.FieldValue.serverTimestamp(),
         ])
     }
 
