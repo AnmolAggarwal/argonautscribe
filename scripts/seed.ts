@@ -31,6 +31,10 @@ import {
   CEMENTATION_TEMPLATE_ID,
   CEMENTATION_TEMPLATE,
 } from "../shared/src/fixtures/cementation-template";
+import {
+  CROWN_PREP_TEMPLATE_ID,
+  CROWN_PREP_TEMPLATE,
+} from "../shared/src/fixtures/crown-prep-template";
 
 const projectId = process.env.GCLOUD_PROJECT ?? "argonautscribe";
 
@@ -100,6 +104,23 @@ async function seedCementationTemplate(): Promise<void> {
   console.log(`  versions/${CEMENTATION_TEMPLATE.version} — archived`);
 }
 
+async function seedCrownPrepTemplate(): Promise<void> {
+  const ref = db.doc(`practices/${TOY_PRACTICE_ID}/templates/${CROWN_PREP_TEMPLATE_ID}`);
+
+  const docData = {
+    ...CROWN_PREP_TEMPLATE,
+    created_at: FieldValue.serverTimestamp(),
+    updated_at: FieldValue.serverTimestamp(),
+  };
+
+  await ref.set(docData);
+  console.log(`practices/${TOY_PRACTICE_ID}/templates/${CROWN_PREP_TEMPLATE_ID} — written (v${CROWN_PREP_TEMPLATE.version})`);
+
+  const versionRef = ref.collection("versions").doc(String(CROWN_PREP_TEMPLATE.version));
+  await versionRef.set(docData);
+  console.log(`  versions/${CROWN_PREP_TEMPLATE.version} — archived`);
+}
+
 async function seedClinician(uid: string): Promise<void> {
   const ref = db.doc(`clinicians/${uid}`);
   const snap = await ref.get();
@@ -123,6 +144,7 @@ async function main(): Promise<void> {
   await seedPractice();
   await seedTemplate();
   await seedCementationTemplate();
+  await seedCrownPrepTemplate();
 
   const { clinicianUid } = parseArgs();
   if (clinicianUid) {

@@ -4,13 +4,13 @@ This document is the working-context file for anyone — human developer or AI a
 
 **Read this entire document before writing any code.** Several of the rules below are load-bearing for the privacy posture of the system, and violating them would break the entire compliance design.
 
-> **Status (2026-05-19):** Repo contains spec + working-context + a starter monorepo bootstrap. Commands (build, test, lint, emulator, benchmark) will be filled in below as they stabilize. The MVP product scope is **web-only**: the dentist creates a note, records audio in the workstation browser, fills picklist fields and free-text qualifiers, reviews the assembled note, copies it to the clipboard, and pastes into the PMS. A mobile PWA with symmetric capabilities is **v1.1**, immediately after MVP pilot — the data model already accommodates it (see SPEC §9 and §17.2).
+> **Status (2026-05-23):** Web MVP is functional (auth, notes CRUD, recording, Deepgram STT, Claude extraction, format-string rendering, deploy to Firebase Hosting). Templates: Cementation, Crown Prep, General (planned). **iOS native app is next** — a symmetric first-class client using the same Firestore backend, zero schema changes. See `docs/MOBILE-APP-SPEC.md` for the full iOS spec.
 
 ---
 
 ## 1. One-Paragraph Project Summary
 
-Dental Scribe is a clinical documentation tool for small dental practices. The dentist creates a note in the web app, optionally taps through picklist fields for the procedure template AND/OR dictates the per-encounter specifics into her workstation microphone, reviews the AI-assembled structured note, and copies it as one block into her PMS — bypassing the PMS's own picklist wizard. The output is structured throughout (every line is `Label: value(s)` in her exact note style), not a free-text paragraph. The pipeline is: audio → Deepgram Nova-3 Medical → Claude Sonnet 4.6 (with tool-use, given the template schema and any picklist values the dentist already set) → merged field values → format-string render → clipboard → PMS. The architecture is deliberately designed to keep Protected Health Information out of the AI pipeline; the dentist dictates clinical content only, and patient identifiers live in a separate "tag" field that is never sent to any third-party API. The stack is Firebase end to end (Firestore, Cloud Functions, Cloud Storage, Auth, Hosting). **MVP is web-only**; a mobile PWA with symmetric capabilities is v1.1.
+Dental Scribe is a clinical documentation tool for small dental practices. The dentist creates a note in the web app or iOS app, optionally taps through picklist fields for the procedure template AND/OR dictates the per-encounter specifics, reviews the AI-assembled structured note, and copies it as one block into her PMS — bypassing the PMS's own picklist wizard. The output is structured throughout (every line is `Label: value(s)` in her exact note style), not a free-text paragraph. The pipeline is: audio → Deepgram Nova-3 Medical → Claude Sonnet 4.6 (with tool-use, given the template schema and any picklist values the dentist already set) → merged field values → format-string render → clipboard → PMS. The architecture is deliberately designed to keep Protected Health Information out of the AI pipeline; the dentist dictates clinical content only, and patient identifiers live in a separate "tag" field that is never sent to any third-party API. The stack is Firebase end to end (Firestore, Cloud Functions, Cloud Storage, Auth, Hosting). **Two clients: web (React/Vite) + iOS (SwiftUI)**; both are symmetric first-class peers sharing the same backend.
 
 For the full spec including user personas, requirements, data model, cost analysis, decisions made, decisions rejected, and roadmap, read `SPEC.md`.
 
@@ -97,11 +97,16 @@ There is no path where the AI-generated note enters the PMS without the clinicia
 - Node.js 20 runtime for Cloud Functions
 - TypeScript throughout
 
-**Frontend (both surfaces):**
-- React (Vite for build) or Svelte/SvelteKit, developer's choice
+**Web Frontend:**
+- React (Vite for build)
 - Firebase JS SDK for Auth, Firestore, Storage
-- IndexedDB via the `idb` library for offline capture queue
 - TypeScript
+
+**iOS App:**
+- Swift 6 + SwiftUI (min iOS 17)
+- Firebase iOS SDK (Auth, Firestore, Storage, Functions, Messaging)
+- AVFoundation for audio recording
+- See `docs/MOBILE-APP-SPEC.md` for full spec
 
 **External APIs:**
 - Deepgram (`@deepgram/sdk`) for speech-to-text
@@ -123,11 +128,18 @@ The intended top-level layout (not yet created — implementer to bootstrap):
 ```
 dental-scribe/
 ├── apps/
-│   └── web/                 # The web app (MVP)
-│       ├── src/
-│       ├── public/
-│       └── package.json
-│   # apps/mobile/ added in v1.1; same Firestore backend, no schema changes
+│   ├── web/                 # Web app (React/Vite)
+│   │   ├── src/
+│   │   ├── public/
+│   │   └── package.json
+│   └── ios/                 # iOS app (SwiftUI)
+│       ├── ArgonautScribe/
+│       │   ├── App/         # Entry point, Firebase configure
+│       │   ├── Models/      # Firestore document models (Swift ports)
+│       │   ├── Views/       # SwiftUI screens
+│       │   ├── Services/    # Auth, Firestore, Storage, Audio, Notifications
+│       │   └── Utilities/
+│       └── ArgonautScribe.xcodeproj
 ├── functions/               # Cloud Functions
 │   ├── src/
 │   │   ├── processRecording.ts
@@ -447,7 +459,8 @@ Test these against the Firebase Emulator before deploying. The `firebase emulato
 ### 8.5 End-to-end tests
 
 - Playwright or Cypress for the web compose surface.
-- Manual testing of the mobile PWA on real devices is unavoidable for capture flow — emulators don't accurately model mic permissions and offline behavior.
+- XCUITest for critical iOS flows (sign in, create note, record, generate, copy, mark filed).
+- Manual testing of the iOS app on real devices is unavoidable for audio capture — the Simulator doesn't accurately model mic permissions and background behavior.
 
 ---
 
@@ -489,9 +502,17 @@ Wide format support, but very large files (>100 MB) require the streaming endpoi
 
 1 MB per document. A very long transcript could approach this. Validate length before writing; if a recording produced an absurdly long transcript (over 50 KB), something went wrong upstream — flag it as an error rather than truncating silently.
 
-### 9.9 Tag synchronization race conditions (v1.1+)
+### 9.9 Tag synchronization across devices
 
-Not a concern in the web-only MVP — there's only one device. When mobile lands in v1.1: phone writes a tag to Firestore on note creation, web app subscribes to `patient_tags` per-note as notes appear in the list. Firestore handles the sync. UX: show "untagged" in the notes list with a refresh hint if the tag doc hasn't arrived yet. Don't block note display on tag arrival.
+With both web and iOS clients, a note created on one device needs its patient tag visible on the other. Firestore real-time listeners handle this automatically. UX: show "Untitled" in the notes list if the tag doc hasn't arrived yet. Don't block note display on tag arrival.
+
+### 9.11 iOS-specific: background audio upload
+
+When the iOS app is backgrounded during an audio upload, a `URLSession` background task must complete the upload. If the upload fails, the segment stays in local storage with `status: "pending_upload"` and retries on next app launch. Never lose audio.
+
+### 9.12 Renderer sync (Swift ↔ TypeScript)
+
+The format-string renderer exists in two places: `shared/src/format.ts` (web + Cloud Function) and `Services/RenderService.swift` (iOS). Both are <100 lines. Keep them in sync manually — shared test vectors (same inputs, same expected outputs) catch drift. If you change the TypeScript renderer, update the Swift one in the same PR.
 
 ### 9.10 Template version drift
 
@@ -501,11 +522,11 @@ A clinician edits a template after some notes have been created from the previou
 
 ## 10. Out of Scope (For Now)
 
-Things that are explicitly NOT in MVP. If you find yourself building any of these, stop and check the spec / re-litigate the decision:
+Things that are explicitly NOT in current scope. If you find yourself building any of these, stop and check the spec / re-litigate the decision:
 
 - PMS integration of any kind
-- Native iOS or Android apps
-- Apple Watch / Action Button integration
+- Android app (iOS first; Android if demand warrants)
+- Apple Watch / Action Button integration (v2 — requires native app, which we now have)
 - PHI scanner / redactor (v2)
 - Visual template editor (v2)
 - Multi-template chaining (v2)
@@ -526,8 +547,10 @@ A pointer guide to the codebase (once it exists):
 
 | Question | Where to look |
 |---|---|
-| How does audio get uploaded? | `apps/web/src/lib/upload.ts` (mobile equivalent added in v1.1) |
-| How does the offline queue work? | Not in MVP. Added in v1.1 as `apps/mobile/src/lib/queue.ts` (IndexedDB via `idb`) |
+| How does audio get uploaded? | Web: `apps/web/src/lib/upload.ts`. iOS: `Services/StorageService.swift` |
+| How does the offline queue work? | Web: not implemented (always online on workstation). iOS: Firestore SDK offline persistence + background `URLSession` for uploads |
+| Where is the iOS app spec? | `docs/MOBILE-APP-SPEC.md` |
+| Where is the iOS format-string renderer? | `apps/ios/ArgonautScribe/Services/RenderService.swift` (Swift port of `shared/src/format.ts`) |
 | What happens when an audio segment finishes uploading? | `functions/src/processSegment.ts` |
 | How is the LLM prompt built? | `functions/src/prompts/buildPrompt.ts` |
 | Where are template format strings rendered? | `shared/src/format.ts` |

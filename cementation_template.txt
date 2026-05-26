@@ -1,3 +1,15 @@
+Appt Type: Final Cementation
+Tooth #: <Tooth-Select Multiple>
+Restoration type: <Type of Restoration>
+Procedure: Temporary crown removed, shade and shape verified with patient, excess temp material removed, try on final crown, verified fit with 1BW, bite checked,<Adjustment (restoration)>, cement with <Cement Type>, remove excess materials, verified with 1BW, light cure. Pt is happy.
+Went over post-op instruction verbally with pt including diets and restrictions
+Patient warning: <Patient Warning>
+Next visit: <Next Visit>  
+
+
+
+
+
 Prompt 1 is which tooth
 
 

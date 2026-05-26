@@ -19,6 +19,11 @@ export function buildSystemPrompt(template: Template): string {
     .map((f) => `  - ${f.name} (${f.label}): ${describeField(f)}`)
     .join("\n");
 
+  const templateSection =
+    template.format_string && template.format_string.trim().length > 0
+      ? `\n\nNote template (the final note the dentist pastes into her PMS — {field_name} placeholders are replaced with the extracted values):\n\`\`\`\n${template.format_string}\n\`\`\``
+      : "";
+
   return `You are extracting structured fields from a dentist's voice dictation for the "${template.name}" template.
 
 For each field, return:
@@ -27,14 +32,15 @@ For each field, return:
   - ai_confidence: "high" if explicitly stated, "inferred" if reasonably inferred from context, "missing" if not mentioned
 
 Fields in this template:
-${fieldLines}
+${fieldLines}${templateSection}
 
 Rules:
   - Do NOT invent clinical details, materials, dosages, readings, or findings not present in the transcript.
   - If a value can be expressed as a picklist option, prefer the picklist option over the qualifier.
   - Use the qualifier for specifics that don't fit the picklist (counts, locations, qualifiers like "generalized" or "more on lowers").
   - Some user-set field values may be provided in the user message — match your output to those values where they exist; do not contradict them.
-  - Return field_values for ALL listed fields, even if missing.`;
+  - Return field_values for ALL listed fields, even if missing.
+  - If the transcript contains clinically relevant details that do not fit any structured field, place them in the additional_notes qualifier. Do not discard information from the transcript.`;
 }
 
 /**

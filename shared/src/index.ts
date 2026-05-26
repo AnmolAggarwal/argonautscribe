@@ -3,3 +3,4 @@ export * from "./constants";
 export * from "./format";
 export * from "./fixtures/toy-template";
 export * from "./fixtures/cementation-template";
+export * from "./fixtures/crown-prep-template";

@@ -20,11 +20,11 @@ export const CEMENTATION_TEMPLATE: Template = {
   fields: [
     {
       name: "tooth",
-      label: "Tooth",
+      label: "Tooth #",
       required: true,
       picklist: null,
-      qualifier: { allowed: true, placeholder: "e.g. #14 DO, #19 MOD" },
-      numeric: { min: 1, max: 32 },
+      qualifier: { allowed: true, placeholder: "e.g. #4, #14 DO, #19 MOD" },
+      numeric: null,
     },
     {
       name: "restoration_type",
@@ -139,7 +139,7 @@ export const CEMENTATION_TEMPLATE: Template = {
     {
       name: "provider",
       label: "Provider",
-      required: true,
+      required: false,
       picklist: {
         kind: "single",
         source: "inline",
@@ -171,8 +171,25 @@ export const CEMENTATION_TEMPLATE: Template = {
       qualifier: { allowed: true, placeholder: "temp name if not listed" },
       numeric: null,
     },
+    {
+      name: "additional_notes",
+      label: "Additional Notes",
+      required: false,
+      picklist: null,
+      qualifier: { allowed: true, placeholder: "any other clinical details from the dictation" },
+      numeric: null,
+    },
   ],
-  format_string: "",
+  format_string: `Appt Type: Final Cementation
+Tooth #: {tooth}
+Restoration type: {restoration_type}
+Procedure: Temporary crown removed, shade and shape verified with patient, excess temp material removed, try on final crown, verified fit with 1BW, bite checked, {adjustment}, cement with {cement_type}, remove excess materials, verified with 1BW, light cure. Pt is happy.
+Went over post-op instruction verbally with pt including diets and restrictions
+Patient warning: {patient_warning}
+Next visit: {next_visit}
+Provider: {provider}
+Assistant: {assistant}
+Additional Notes: {additional_notes}`,
   few_shot_examples: [],
   keywords: [
     "cementation:2",
