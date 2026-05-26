@@ -19,28 +19,12 @@ enum StorageService {
         let metadata = StorageMetadata()
         metadata.contentType = "audio/m4a"
 
+        // putFileAsync is Firebase's own async wrapper (Firebase 11+).
         _ = try await ref.putFileAsync(from: fileURL, metadata: metadata)
 
         // Clean up local temp file.
         try? FileManager.default.removeItem(at: fileURL)
 
         return path
-    }
-}
-
-// Firebase Storage SDK extension for async file upload.
-extension StorageReference {
-    func putFileAsync(from url: URL, metadata: StorageMetadata?) async throws -> StorageMetadata {
-        try await withCheckedThrowingContinuation { continuation in
-            putFile(from: url, metadata: metadata) { meta, error in
-                if let error {
-                    continuation.resume(throwing: error)
-                } else if let meta {
-                    continuation.resume(returning: meta)
-                } else {
-                    continuation.resume(throwing: NSError(domain: "StorageService", code: -1))
-                }
-            }
-        }
     }
 }
