@@ -42,6 +42,10 @@ Thumbs.db
 *.swp
 *.swo
 
+# Xcode user data
+*.xcuserstate
+xcuserdata/
+
 # Firebase
 .firebase/
 *-debug.log

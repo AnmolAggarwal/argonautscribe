@@ -5,8 +5,9 @@ import FirebaseFunctions
 /// Firestore reads/writes for notes, tags, templates, and segments.
 /// All methods take explicit UIDs — no global auth state dependency.
 enum FirestoreService {
-    private static let db = Firestore.firestore()
-    private static let functions = Functions.functions(region: "us-central1")
+    // nonisolated(unsafe): these Firebase singletons are internally thread-safe.
+    nonisolated(unsafe) private static let db = Firestore.firestore()
+    nonisolated(unsafe) private static let functions = Functions.functions(region: "us-central1")
 
     // MARK: - Notes
 
@@ -156,7 +157,7 @@ enum FirestoreService {
 
 extension ISO8601DateFormatter {
     /// Day-level only: "2026-05-23"
-    static let dayOnly: ISO8601DateFormatter = {
+    nonisolated(unsafe) static let dayOnly: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withFullDate, .withDashSeparatorInDate]
         return f
