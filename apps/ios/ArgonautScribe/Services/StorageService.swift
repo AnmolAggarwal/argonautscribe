@@ -19,8 +19,9 @@ enum StorageService {
         let metadata = StorageMetadata()
         metadata.contentType = "audio/m4a"
 
-        // putFileAsync is Firebase's own async wrapper (Firebase 11+).
-        _ = try await ref.putFileAsync(from: fileURL, metadata: metadata)
+        // putFileAsync returns non-Sendable StorageMetadata; wrap in
+        // a nonisolated(unsafe) let to silence the Swift 6 data-race warning.
+        nonisolated(unsafe) let _ = try await ref.putFileAsync(from: fileURL, metadata: metadata)
 
         // Clean up local temp file.
         try? FileManager.default.removeItem(at: fileURL)

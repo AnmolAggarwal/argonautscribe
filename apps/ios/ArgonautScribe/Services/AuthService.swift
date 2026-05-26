@@ -3,6 +3,7 @@ import FirebaseAuth
 import FirebaseFirestore
 
 /// Manages Firebase Auth state and clinician profile.
+@MainActor
 @Observable
 final class AuthService {
     private(set) var user: User?

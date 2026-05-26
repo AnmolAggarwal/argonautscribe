@@ -58,11 +58,13 @@ struct SignInView: View {
         .padding()
     }
 
+    @MainActor
     private func signIn() async {
         isLoading = true
         errorMessage = nil
+        let authService = auth
         do {
-            try await auth.signIn(email: email, password: password)
+            try await authService.signIn(email: email, password: password)
         } catch {
             errorMessage = error.localizedDescription
         }
