@@ -5,9 +5,10 @@ import FirebaseFunctions
 /// Firestore reads/writes for notes, tags, templates, and segments.
 /// All methods take explicit UIDs — no global auth state dependency.
 enum FirestoreService {
-    // nonisolated(unsafe): these Firebase singletons are internally thread-safe.
+    // nonisolated(unsafe): Firestore singleton is not Sendable.
     nonisolated(unsafe) private static let db = Firestore.firestore()
-    nonisolated(unsafe) private static let functions = Functions.functions(region: "us-central1")
+    // Functions is Sendable — no annotation needed.
+    private static let functions = Functions.functions(region: "us-central1")
 
     // MARK: - Notes
 

@@ -12,10 +12,8 @@ final class AuthService {
 
     var isSignedIn: Bool { user != nil && clinician != nil }
 
-    // nonisolated(unsafe): accessed in deinit (which is nonisolated in Swift 6).
-    // Firebase listener removal is thread-safe.
-    nonisolated(unsafe) private var authHandle: AuthStateDidChangeListenerHandle?
-    nonisolated(unsafe) private var clinicianListener: ListenerRegistration?
+    private var authHandle: AuthStateDidChangeListenerHandle?
+    private var clinicianListener: ListenerRegistration?
 
     init() {
         authHandle = Auth.auth().addStateDidChangeListener { [weak self] _, user in

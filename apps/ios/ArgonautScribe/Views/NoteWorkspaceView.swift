@@ -157,20 +157,22 @@ struct NoteWorkspaceView: View {
         let nextText = RenderService.render(template: template, fieldValues: nextValues)
 
         // Encode the value as a dictionary for Firestore.
-        var dict: [String: Any] = [:]
-        if let p = value.picklist {
+        let picklistAny: Any = {
+            guard let p = value.picklist else { return NSNull() }
             switch p {
-            case .string(let s): dict["picklist"] = s
-            case .number(let n): dict["picklist"] = n
-            case .bool(let b): dict["picklist"] = b
-            case .array(let a): dict["picklist"] = a
+            case .string(let s): return s
+            case .number(let n): return n
+            case .bool(let b): return b
+            case .array(let a): return a
             }
-        } else {
-            dict["picklist"] = NSNull()
-        }
-        dict["qualifier"] = value.qualifier ?? NSNull()
-        dict["ai_confidence"] = value.aiConfidence ?? NSNull()
-        dict["source"] = "user"
+        }()
+
+        let dict: [String: Any] = [
+            "picklist": picklistAny,
+            "qualifier": value.qualifier ?? NSNull(),
+            "ai_confidence": value.aiConfidence ?? NSNull(),
+            "source": "user",
+        ]
 
         try? await FirestoreService.writeFieldValue(
             clinicianUid: uid,

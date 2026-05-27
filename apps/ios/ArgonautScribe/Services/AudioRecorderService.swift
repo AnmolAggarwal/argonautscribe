@@ -36,7 +36,7 @@ final class AudioRecorderService {
         isRecording = true
         duration = 0
 
-        timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+        timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { @MainActor [weak self] _ in
             guard let self, let rec = self.recorder, rec.isRecording else { return }
             self.duration = rec.currentTime
         }
