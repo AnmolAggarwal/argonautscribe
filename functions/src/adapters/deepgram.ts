@@ -14,7 +14,8 @@
  * per the post-STT deletion invariant (SPEC §14.16, CLAUDE.md §2.5).
  */
 
-import { createClient } from "@deepgram/sdk";
+// Lazy-imported inside transcribeAudio() to avoid 10s deploy timeout.
+// import { createClient } from "@deepgram/sdk";
 
 /**
  * Common dental terms that benefit from keyterm prompting across all
@@ -48,6 +49,8 @@ export async function transcribeAudio(args: {
   keywords: string[];
 }): Promise<string> {
   const { apiKey, audio, mimeType, keywords } = args;
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { createClient } = require("@deepgram/sdk") as typeof import("@deepgram/sdk");
   const dg = createClient(apiKey);
 
   // Merge common terms with per-template terms, deduplicate.

@@ -39,8 +39,7 @@ export const GENERAL_TEMPLATE: Template = {
     "but do NOT invent clinical details that were not dictated. " +
     "Return the result in the note_content field.",
   few_shot_examples: [],
-  deepgram_keywords: [],
-  practice_id: "",
+  keywords: [],
   created_at: SENTINEL_TS,
   updated_at: SENTINEL_TS,
 };

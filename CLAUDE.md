@@ -4,7 +4,7 @@ This document is the working-context file for anyone — human developer or AI a
 
 **Read this entire document before writing any code.** Several of the rules below are load-bearing for the privacy posture of the system, and violating them would break the entire compliance design.
 
-> **Status (2026-05-23):** Web MVP is functional (auth, notes CRUD, recording, Deepgram STT, Claude extraction, format-string rendering, deploy to Firebase Hosting). Templates: Cementation, Crown Prep, General (planned). **iOS native app is next** — a symmetric first-class client using the same Firestore backend, zero schema changes. See `docs/MOBILE-APP-SPEC.md` for the full iOS spec.
+> **Status (2026-05-30):** Web MVP is functional (auth, notes CRUD, recording, Deepgram STT, Claude extraction, format-string rendering, deterministic validation with copy warnings, deploy to Firebase Hosting). Templates: Cementation, Crown Prep, General. iOS native app scaffolded (SwiftUI, Firebase SDK integrated, builds on device). **Remaining for pilot:** seed templates to Firestore, few-shot examples from real dictations, end-to-end test with real audio, TestFlight build.
 
 ---
 
@@ -20,9 +20,9 @@ For the full spec including user personas, requirements, data model, cost analys
 
 These are non-negotiable rules. Violating any of them breaks the privacy or compliance design of the system. If you find existing code that violates one, treat it as a bug to fix, not a precedent to follow.
 
-### 2.1 The patient tag never enters the LLM context
+### 2.1 The patient tag is never intentionally sent to third-party services
 
-The patient tag (`tag`, `patient_tags/{recording_id}.tag`) is the **only** piece of PHI in the system. It is never sent to:
+The patient tag (`tag`, `patient_tags/{recording_id}.tag`) is the **only** piece of structured PHI in the system. We do not intentionally send it to:
 
 - The STT provider (Deepgram)
 - The LLM provider (Anthropic / OpenAI / any other)
@@ -33,9 +33,11 @@ The patient tag (`tag`, `patient_tags/{recording_id}.tag`) is the **only** piece
 
 When constructing prompts for Claude, never reference the `patient_tags` subcollection. The LLM call should receive: the transcript, the template schema, the few-shot examples, and the system prompt. That's it. If you find yourself reaching for the tag, stop and reconsider.
 
+**Important caveat on audio:** While we never intentionally transmit patient identifiers, the audio recording itself may contain incidental patient name mentions in the dentist's dictation. This audio is sent to Deepgram for transcription. We mitigate this risk through: (1) HIPAA-appropriate BAAs with all third-party vendors, (2) immediate deletion of audio after STT completes, (3) a 24-hour lifecycle rule on the Storage bucket as a safety net, and (4) instructing clinicians to dictate clinical content only, not patient identifiers. The system is designed to minimize PHI exposure, not to guarantee zero incidental exposure — which is not achievable with voice-based input.
+
 ### 2.2 The patient tag never enters the STT request
 
-Same rule, applied to the STT side. The audio file is sent to Deepgram. The keyword list from the template is sent to Deepgram. The tag is not sent.
+Same rule, applied to the STT side. The audio file is sent to Deepgram. The keyword list from the template is sent to Deepgram. The tag is not sent. Audio may contain incidental patient name mentions — see §2.1 caveat.
 
 ### 2.3 UUIDs are random v4. Never derived from PHI.
 
@@ -102,10 +104,11 @@ There is no path where the AI-generated note enters the PMS without the clinicia
 - Firebase JS SDK for Auth, Firestore, Storage
 - TypeScript
 
-**iOS App:**
-- Swift 6 + SwiftUI (min iOS 17)
-- Firebase iOS SDK (Auth, Firestore, Storage, Functions, Messaging)
+**iOS App** (`apps/ArgonautScribe/`):
+- Swift 6 + SwiftUI (min iOS 17), Xcode project (not SPM — see §9.13)
+- Firebase iOS SDK (Auth, Firestore, Storage, Functions) — no Messaging (crashes on simulator)
 - AVFoundation for audio recording
+- `GoogleService-Info.plist` is gitignored — must be added manually per machine
 - See `docs/MOBILE-APP-SPEC.md` for full spec
 
 **External APIs:**
@@ -123,59 +126,74 @@ There is no path where the AI-generated note enters the PMS without the clinicia
 
 ## 4. Repository Structure
 
-The intended top-level layout (not yet created — implementer to bootstrap):
+Actual layout as built:
 
 ```
-dental-scribe/
+ArgonautScribe/
 ├── apps/
-│   ├── web/                 # Web app (React/Vite)
+│   ├── web/                     # Web app (React/Vite)
 │   │   ├── src/
-│   │   ├── public/
+│   │   │   ├── screens/         # NotesList, NoteWorkspace, SignIn
+│   │   │   ├── components/      # FieldRow, RecordingPanel
+│   │   │   ├── lib/             # firebase.ts, auth.tsx, notes.ts, segments.ts, recorder.ts
+│   │   │   ├── App.tsx
+│   │   │   └── main.tsx
 │   │   └── package.json
-│   └── ios/                 # iOS app (SwiftUI)
-│       ├── ArgonautScribe/
-│       │   ├── App/         # Entry point, Firebase configure
-│       │   ├── Models/      # Firestore document models (Swift ports)
-│       │   ├── Views/       # SwiftUI screens
-│       │   ├── Services/    # Auth, Firestore, Storage, Audio, Notifications
-│       │   └── Utilities/
-│       └── ArgonautScribe.xcodeproj
-├── functions/               # Cloud Functions
+│   └── ArgonautScribe/          # iOS app (SwiftUI) — Xcode project, NOT SPM
+│       ├── ArgonautScribe.xcodeproj
+│       └── ArgonautScribe/
+│           ├── App/             # ArgonautScribeApp.swift, RootView.swift
+│           ├── Models/          # Note, Template, Clinician, PatientTag, Segment (Swift ports)
+│           ├── Views/           # SignInView, NotesListView, NoteWorkspaceView, FieldRowView, RecordingControlsView
+│           ├── Services/        # AuthService, FirestoreService, StorageService, AudioRecorderService, RenderService
+│           ├── Utilities/       # Constants.swift
+│           ├── Assets.xcassets  # App icon (1024x1024)
+│           └── GoogleService-Info.plist  # GITIGNORED — add manually
+├── functions/                   # Cloud Functions (Node.js 20, TypeScript)
 │   ├── src/
-│   │   ├── processRecording.ts
-│   │   ├── markFiled.ts
+│   │   ├── index.ts             # Exports generateNote, markFiled
+│   │   ├── generate-note.ts     # Main pipeline: STT → LLM → merge → validate → render
+│   │   ├── mark-filed.ts        # Delete note + audit event
+│   │   ├── merge.ts             # AI field values merged with user-set values
+│   │   ├── render.ts            # Format-string renderer (CJS copy)
+│   │   ├── validate.ts          # Deterministic validator (CJS copy)
+│   │   ├── types.ts             # Local type mirrors (CJS can't import shared TS)
 │   │   ├── adapters/
-│   │   │   ├── deepgram.ts
-│   │   │   └── anthropic.ts
-│   │   ├── templates/       # Template fetching, validation, prompt assembly
-│   │   ├── prompts/         # System prompts, format string renderer
-│   │   └── index.ts
+│   │   │   ├── deepgram.ts      # Deepgram Nova-3 Medical STT
+│   │   │   └── anthropic.ts     # Claude Sonnet 4.6 tool-use extraction
+│   │   └── prompts/
+│   │       ├── build.ts         # System prompt, few-shot messages, user message
+│   │       └── schema.ts        # Template → JSON Schema for Claude tool
 │   └── package.json
-├── shared/                  # Code shared between apps and functions
+├── shared/                      # Shared types + logic (web app imports via pnpm workspace)
 │   ├── src/
-│   │   ├── types.ts         # Firestore document types
-│   │   ├── templates.ts     # Template type definitions
-│   │   └── constants.ts
+│   │   ├── index.ts             # Re-exports everything
+│   │   ├── types.ts             # All Firestore document types (source of truth)
+│   │   ├── constants.ts
+│   │   ├── format.ts            # Format-string renderer ({field_name} → value)
+│   │   ├── validate.ts          # validateNote(), reviewLevel()
+│   │   └── fixtures/            # Template definitions
+│   │       ├── cementation-template.ts
+│   │       ├── crown-prep-template.ts
+│   │       ├── general-template.ts
+│   │       └── toy-template.ts
 │   └── package.json
+├── scripts/
+│   └── seed.ts                  # Seeds templates to Firestore
 ├── firestore/
 │   ├── firestore.rules
-│   ├── firestore.indexes.json
 │   └── storage.rules
-├── benchmarks/              # Recording → expected output pairs for accuracy testing
-│   ├── recordings/          # Audio files (gitignored, stored separately)
-│   ├── expected/            # Hand-graded ideal outputs
-│   └── runner.ts
-├── SPEC.md                  # Full spec (lives at repo root)
-├── CLAUDE.md                # This file (lives at repo root)
+├── SPEC.md
+├── CLAUDE.md
 ├── docs/
-│   └── ADR/                 # Architecture Decision Records as new decisions are made
+│   ├── ADR/
+│   └── MOBILE-APP-SPEC.md
 ├── firebase.json
 ├── .firebaserc
-├── package.json             # Workspace root, manages monorepo via pnpm/yarn/npm
-└── README.md
+└── package.json                 # pnpm workspace root
 ```
 
-Workspaces (pnpm or yarn) are used so `shared` types are usable in both `apps/*` and `functions/`.
+pnpm workspaces link `@argonaut/shared` into `apps/web` and `functions`. The iOS app does **not** use the shared package — it has hand-written Swift model ports that must be kept in sync manually (see §9.12).
 
 ---
 
@@ -347,6 +365,30 @@ pnpm run benchmark -- --template composite
 
 The benchmark loads all `recordings/composite/*.webm` files, runs them through the pipeline, compares to `expected/composite/*.json`, and reports per-field accuracy plus a summary score. Run this whenever changing prompts, models, or template definitions.
 
+### 6.6 Validation and mapping_status
+
+Every `FieldValue` carries a `mapping_status` field set by Claude during extraction:
+
+- `"exact"` — value matches a picklist option verbatim. No review needed.
+- `"unmapped"` — value was heard clearly in the transcript but doesn't match any picklist option. Placed in qualifier for doctor review (e.g. dentist said "Dr. Patel" but picklist has "Dr. Parul Aggarwal, DDS"). Shows a **red** review chip.
+- `"missing"` — field was not mentioned in the transcript at all. If required, shows **red**; if optional, shows **none**.
+
+When a user manually selects a picklist value, set `mapping_status: "exact"` (it's definitionally exact).
+
+**Deterministic validator** (`shared/src/validate.ts`): Runs after Claude returns field values and before the dentist sees the Copy button. Checks:
+
+1. Required field missing entirely → **blocking**
+2. Required field has `mapping_status: "missing"` with no value → **blocking**
+3. Picklist field has `mapping_status: "unmapped"` → **warning**
+4. Rendered note contains artifacts (`null`, `undefined`, `[object Object]`, `NaN`) → **blocking**
+
+Returns `{ safe_to_copy: boolean, issues: ValidationIssue[] }`. Blocking issues disable the Copy button. Warnings show a yellow box but allow copy.
+
+**`reviewLevel()`** derives per-field UI color from the metadata:
+- `"none"` (green) — exact match or user-set
+- `"yellow"` — inferred confidence, probably fine
+- `"red"` — unmapped or missing required, must review
+
 ---
 
 ## 7. Firestore Security Rules
@@ -514,6 +556,36 @@ When the iOS app is backgrounded during an audio upload, a `URLSession` backgrou
 
 The format-string renderer exists in two places: `shared/src/format.ts` (web + Cloud Function) and `Services/RenderService.swift` (iOS). Both are <100 lines. Keep them in sync manually — shared test vectors (same inputs, same expected outputs) catch drift. If you change the TypeScript renderer, update the Swift one in the same PR.
 
+### 9.13 iOS app uses Xcode project, not SPM
+
+The iOS app was migrated from a Swift Package Manager executable target to a proper
+`.xcodeproj`. SPM executable targets don't produce proper iOS app bundles — no bundle ID,
+no Info.plist, no `Bundle.main` resource access. If you see references to `apps/ios/` or
+`Package.swift` for the iOS app, those are stale. The app lives at
+`apps/ArgonautScribe/ArgonautScribe.xcodeproj`.
+
+### 9.14 Swift 6 concurrency patterns
+
+Firebase SDK types aren't `Sendable`. The patterns we use:
+- `nonisolated(unsafe)` on Firebase singleton statics (`db`, `storage`, `functions`)
+- `@MainActor` on service classes that touch UI state
+- `@unchecked Sendable` on `AudioRecorderService` (manually thread-safe)
+- `MainActor.assumeIsolated` inside Timer callbacks on `@MainActor` classes
+- Fully qualify `FirebaseFirestore.FieldValue.serverTimestamp()` to avoid collision with
+  our model's `FieldValue` type
+- `AuthService` has no `deinit` — it's a singleton that never deallocates, and Swift 6
+  prohibits accessing `@MainActor`-isolated properties from `nonisolated deinit`
+
+### 9.15 iOS 26 SDK removed SwiftUI modifiers
+
+`.keyboardType()` and `.textInputAutocapitalization()` were removed in iOS 26 SDK.
+Use `.textContentType(.emailAddress)` instead — it gives the right keyboard automatically.
+
+### 9.16 FirebaseMessaging crashes on simulator
+
+`FIRMessagingAuthKeychain` throws a nil insertion exception on simulator. We removed the
+FirebaseMessaging dependency entirely — it's not needed for MVP (no push notifications yet).
+
 ### 9.10 Template version drift
 
 A clinician edits a template after some notes have been created from the previous version. Old notes retain a `template_version` reference, and the prior version is preserved at `/practices/{pid}/templates/{tid}/versions/{v}`. The review panel must render an old note against the version that created it, not the current version. Store the template version on every note.
@@ -547,18 +619,43 @@ A pointer guide to the codebase (once it exists):
 
 | Question | Where to look |
 |---|---|
-| How does audio get uploaded? | Web: `apps/web/src/lib/upload.ts`. iOS: `Services/StorageService.swift` |
+| How does audio get uploaded? | Web: `apps/web/src/lib/segments.ts`. iOS: `Services/StorageService.swift` |
 | How does the offline queue work? | Web: not implemented (always online on workstation). iOS: Firestore SDK offline persistence + background `URLSession` for uploads |
 | Where is the iOS app spec? | `docs/MOBILE-APP-SPEC.md` |
 | Where is the iOS format-string renderer? | `apps/ArgonautScribe/ArgonautScribe/Services/RenderService.swift` (Swift port of `shared/src/format.ts`) |
-| What happens when an audio segment finishes uploading? | `functions/src/processSegment.ts` |
-| How is the LLM prompt built? | `functions/src/prompts/buildPrompt.ts` |
+| Where is the generateNote Cloud Function? | `functions/src/generate-note.ts` — STT + LLM + merge + validate + render |
+| How is the LLM prompt built? | `functions/src/prompts/build.ts` (system prompt, few-shot messages, user message) |
+| How is the LLM tool schema built? | `functions/src/prompts/schema.ts` (template fields → JSON Schema for Claude tool-use) |
+| Where does AI merge happen? | `functions/src/merge.ts` — merges AI field values with user-set values, respects source provenance |
+| Where is the deterministic validator? | `shared/src/validate.ts` (source of truth) + `functions/src/validate.ts` (CJS copy) |
 | Where are template format strings rendered? | `shared/src/format.ts` |
-| Where are the few-shot examples per template? | Stored in Firestore template documents, not in code |
+| Where are template fixtures? | `shared/src/fixtures/` — cementation, crown-prep, general, toy templates |
+| Where are the few-shot examples per template? | In template fixture files and seeded to Firestore via `scripts/seed.ts` |
 | Where are security rules? | `firestore/firestore.rules`, `firestore/storage.rules` |
-| Where do I add a new template? | Use the web admin UI (when built); for MVP, edit Firestore directly via the console or a seeding script |
-| Where do I run the accuracy benchmark? | `benchmarks/runner.ts` |
+| Where do I add a new template? | Create a fixture in `shared/src/fixtures/`, export from `shared/src/index.ts`, add to `scripts/seed.ts` |
+| Where do I run the accuracy benchmark? | `benchmarks/runner.ts` (not yet populated) |
 | Where are decision records kept? | `docs/ADR/` (use Architecture Decision Record format for any non-trivial decision) |
+| Where is the web note workspace? | `apps/web/src/screens/NoteWorkspace.tsx` — field editing, preview, copy, validation warnings |
+| Where are field row components? | `apps/web/src/components/FieldRow.tsx` — picklist + qualifier + review-level chips |
+
+### 11.1 Session Memory Files
+
+Claude Code persists project knowledge across sessions in memory files at
+`.claude/projects/.../memory/`. These are **not** checked into git — they live
+locally and are auto-loaded by Claude at session start.
+
+| File | What it captures |
+|---|---|
+| `MEMORY.md` | Index of all memory files with one-line descriptions |
+| `user-profile.md` | Anmol's role, working style, the pilot practice and its staff |
+| `discuss-before-editing.md` | Talk through design before proposing code changes — don't jump to edits |
+| `product-reframe-picklist-and-paragraph.md` | The real dental workflow: PMS picklist + typed paragraph; our product targets the structured note, not prose |
+| `project-status-2026-05-30.md` | Full inventory of what's built (web, functions, shared, iOS), key architecture decisions, and remaining items for pilot |
+| `validation-and-mapping-status.md` | `mapping_status` field design, deterministic validator, what was adopted vs rejected from ChatGPT's review |
+| `ios-app-patterns.md` | Xcode project (not SPM), Swift 6 concurrency patterns, SDK compatibility gotchas, model/renderer sync |
+
+When making significant architectural decisions or learning new project context, create or
+update memory files so future sessions don't re-derive the same knowledge.
 
 ---
 

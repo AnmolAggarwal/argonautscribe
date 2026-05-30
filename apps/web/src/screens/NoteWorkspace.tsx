@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { doc, getDoc, onSnapshot } from "firebase/firestore";
-import { render } from "@argonaut/shared";
-import type { FieldValue, Note, PatientTag, Template } from "@argonaut/shared";
+import { render, validateNote } from "@argonaut/shared";
+import type { FieldValue, Note, PatientTag, Template, ValidationResult } from "@argonaut/shared";
 import { db } from "../lib/firebase";
 import { useAuth } from "../lib/auth";
 import { markFiled, writeFieldValue, writePatientTag } from "../lib/notes";
@@ -88,6 +88,11 @@ export function NoteWorkspace() {
     if (!template || !note) return "";
     return render(template, note.field_values);
   }, [template, note]);
+
+  const validation: ValidationResult | null = useMemo(() => {
+    if (!template || !note || !renderedNote) return null;
+    return validateNote(template, note.field_values, renderedNote);
+  }, [template, note, renderedNote]);
 
   if (!user || !clinician || !note || !template) {
     return (
@@ -263,14 +268,58 @@ export function NoteWorkspace() {
             {renderedNote || "(empty — fill in fields to see the assembled note)"}
           </pre>
 
+          {/* Validation warnings */}
+          {validation && validation.issues.length > 0 && (
+            <div
+              style={{
+                marginTop: "1rem",
+                padding: "0.75rem",
+                borderRadius: 4,
+                border: `1px solid ${validation.safe_to_copy ? "#d69e2e" : "#e53e3e"}`,
+                background: validation.safe_to_copy ? "#fffff0" : "#fff5f5",
+              }}
+            >
+              <div
+                style={{
+                  fontWeight: 600,
+                  fontSize: "0.85rem",
+                  marginBottom: "0.4rem",
+                  color: validation.safe_to_copy ? "#744210" : "#9b2c2c",
+                }}
+              >
+                {validation.safe_to_copy
+                  ? "Warnings — review before copying"
+                  : "Blocking issues — fix before copying"}
+              </div>
+              <ul style={{ margin: 0, paddingLeft: "1.2rem", fontSize: "0.8rem" }}>
+                {validation.issues.map((issue, i) => (
+                  <li
+                    key={i}
+                    style={{
+                      marginBottom: "0.2rem",
+                      color: issue.severity === "blocking" ? "#9b2c2c" : "#744210",
+                    }}
+                  >
+                    {issue.message}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem" }}>
             <button
               onClick={() => void handleCopy()}
-              disabled={!renderedNote}
+              disabled={!renderedNote || (validation != null && !validation.safe_to_copy)}
               style={{
                 padding: "0.6rem 1rem",
                 flex: 1,
-                cursor: renderedNote ? "pointer" : "not-allowed",
+                cursor:
+                  renderedNote && (validation == null || validation.safe_to_copy)
+                    ? "pointer"
+                    : "not-allowed",
+                opacity:
+                  validation != null && !validation.safe_to_copy ? 0.5 : 1,
               }}
             >
               {copyState === "copied" ? "Copied!" : "Copy Note"}

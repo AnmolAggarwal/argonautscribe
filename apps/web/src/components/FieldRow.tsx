@@ -1,4 +1,5 @@
 import type { FieldValue, TemplateField } from "@argonaut/shared";
+import { reviewLevel } from "@argonaut/shared";
 
 interface Props {
   field: TemplateField;
@@ -18,6 +19,7 @@ interface Props {
 export function FieldRow({ field, value, onChange }: Props) {
   const picklist = value?.picklist ?? null;
   const qualifier = value?.qualifier ?? "";
+  const level = reviewLevel(field, value ?? undefined);
 
   function emit(
     patch: Partial<Pick<FieldValue, "picklist" | "qualifier">>,
@@ -27,31 +29,52 @@ export function FieldRow({ field, value, onChange }: Props) {
       qualifier: "qualifier" in patch ? patch.qualifier! : (qualifier === "" ? null : qualifier),
       ai_confidence: value?.ai_confidence ?? null,
       source: "user",
+      mapping_status: "exact",
     };
     onChange(next);
   }
+
+  const borderColor =
+    level === "red" ? "#e53e3e" : level === "yellow" ? "#d69e2e" : "#eee";
+  const bgColor =
+    level === "red" ? "#fff5f5" : level === "yellow" ? "#fffff0" : "#fafafa";
 
   return (
     <div
       style={{
         marginBottom: "0.75rem",
         padding: "0.75rem",
-        border: "1px solid #eee",
+        border: `1px solid ${borderColor}`,
         borderRadius: 4,
-        background: "#fafafa",
+        background: bgColor,
       }}
     >
-      <label
-        style={{
-          display: "block",
-          fontWeight: 600,
-          marginBottom: "0.5rem",
-          fontSize: "0.95rem",
-        }}
-      >
-        {field.label}
-        {field.required ? <span style={{ color: "crimson" }}> *</span> : null}
-      </label>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
+        <label
+          style={{
+            fontWeight: 600,
+            fontSize: "0.95rem",
+            flex: 1,
+          }}
+        >
+          {field.label}
+          {field.required ? <span style={{ color: "crimson" }}> *</span> : null}
+        </label>
+        {level !== "none" && (
+          <span
+            style={{
+              fontSize: "0.7rem",
+              fontWeight: 600,
+              padding: "0.15rem 0.4rem",
+              borderRadius: 3,
+              color: "white",
+              background: level === "red" ? "#e53e3e" : "#d69e2e",
+            }}
+          >
+            {level === "red" ? "Review" : "Check"}
+          </span>
+        )}
+      </div>
 
       {renderPicklistControl(field, picklist, (next) => emit({ picklist: next }))}
 

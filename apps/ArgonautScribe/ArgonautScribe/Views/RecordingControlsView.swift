@@ -1,5 +1,6 @@
 import SwiftUI
 import FirebaseFirestore
+import FirebaseAuth
 
 /// Mic button, timer, segment list, and Generate button.
 struct RecordingControlsView: View {

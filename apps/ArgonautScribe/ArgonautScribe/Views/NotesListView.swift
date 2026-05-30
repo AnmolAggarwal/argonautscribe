@@ -1,4 +1,5 @@
 import SwiftUI
+import FirebaseAuth
 import FirebaseFirestore
 
 struct NotesListView: View {
@@ -47,6 +48,9 @@ struct NotesListView: View {
                     }
                 }
             }
+        }
+        .navigationDestination(for: String.self) { noteId in
+            NoteWorkspaceView(noteId: noteId)
         }
         .navigationTitle("Argonaut Scribe")
         .toolbar {
@@ -100,9 +104,6 @@ struct NotesListView: View {
 
                 StatusBadge(status: note.status)
             }
-        }
-        .navigationDestination(for: String.self) { noteId in
-            NoteWorkspaceView(noteId: noteId)
         }
     }
 

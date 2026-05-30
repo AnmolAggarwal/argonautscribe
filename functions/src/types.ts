@@ -12,12 +12,14 @@
 
 export type AiConfidence = "high" | "inferred" | "missing" | null;
 export type FieldValueSource = "ai" | "user" | "ai+user";
+export type MappingStatus = "exact" | "unmapped" | "missing";
 
 export interface FieldValue {
   picklist: string | string[] | number | boolean | null;
   qualifier: string | null;
   ai_confidence: AiConfidence;
   source: FieldValueSource;
+  mapping_status: MappingStatus;
 }
 
 export interface PicklistSpec {

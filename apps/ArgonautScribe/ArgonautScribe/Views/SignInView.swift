@@ -19,15 +19,13 @@ struct SignInView: View {
 
             VStack(spacing: 12) {
                 TextField("Email", text: $email)
-                    .textContentType(.emailAddress)
-                    .keyboardType(.emailAddress)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
                     .textFieldStyle(.roundedBorder)
+                    .textContentType(.emailAddress)
+                    .autocorrectionDisabled()
 
                 SecureField("Password", text: $password)
-                    .textContentType(.password)
                     .textFieldStyle(.roundedBorder)
+                    .textContentType(.password)
             }
             .padding(.horizontal)
 

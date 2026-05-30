@@ -31,6 +31,7 @@ import { buildSystemPrompt, buildFewShotMessages, buildUserMessage } from "./pro
 import { buildToolSchema } from "./prompts/schema";
 import { mergeFieldValues, type AiFieldValue } from "./merge";
 import { render } from "./render";
+import { validateNote } from "./validate";
 import type { FieldValue, Template } from "./types";
 
 const DEEPGRAM_KEY = defineSecret("DEEPGRAM_API_KEY");
@@ -246,11 +247,23 @@ export const generateNote = onCall<GenerateNoteRequest, Promise<GenerateNoteResp
       );
       const finalText = render(template, merged);
 
+      // --- Validate ---
+      const validation = validateNote(template, merged, finalText);
+      logger.info("Validation result", {
+        noteId,
+        safe_to_copy: validation.safe_to_copy,
+        issueCount: validation.issues.length,
+      });
+
       // --- Write back ---
       await noteRef.update({
         transcript: combinedTranscript,
         field_values: merged,
         final_note_text: finalText,
+        validation: {
+          safe_to_copy: validation.safe_to_copy,
+          issues: validation.issues,
+        },
         status: "ready",
         error_message: null,
         updated_at: AdminFieldValue.serverTimestamp(),

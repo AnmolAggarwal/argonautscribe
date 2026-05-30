@@ -69,8 +69,14 @@ function buildFieldValueSchema(field: TemplateField): JsonSchemaObject {
         description:
           'high = explicitly stated in transcript; inferred = reasonably inferred from context; missing = not mentioned.',
       },
+      mapping_status: {
+        type: "string",
+        enum: ["exact", "unmapped", "missing"],
+        description:
+          'exact = value matches a picklist option verbatim; unmapped = value heard clearly but does not match any allowed option (put in qualifier); missing = not mentioned in transcript.',
+      },
     },
-    required: ["picklist", "qualifier", "ai_confidence"],
+    required: ["picklist", "qualifier", "ai_confidence", "mapping_status"],
     additionalProperties: false,
   };
 }

@@ -10,7 +10,9 @@
  * here — keeps this adapter side-effect-free and easy to test.
  */
 
-import Anthropic from "@anthropic-ai/sdk";
+// Lazy-imported inside fillTemplateViaClaude() to avoid 10s deploy timeout.
+// Runtime: const Anthropic = require("@anthropic-ai/sdk").default;
+import type AnthropicType from "@anthropic-ai/sdk";
 import type { FieldValue } from "../types";
 
 interface FillTemplateArgs {
@@ -45,6 +47,8 @@ export async function fillTemplateViaClaude(args: FillTemplateArgs): Promise<Fil
     maxTokens = 2000,
   } = args;
 
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const Anthropic = (require("@anthropic-ai/sdk") as { default: typeof import("@anthropic-ai/sdk").default }).default;
   const client = new Anthropic({ apiKey });
 
   // Retry with exponential backoff for transient 529 (overloaded) errors.
@@ -71,7 +75,7 @@ export async function fillTemplateViaClaude(args: FillTemplateArgs): Promise<Fil
 }
 
 async function callClaude(
-  client: Anthropic,
+  client: AnthropicType,
   args: { model: string; systemPrompt: string; toolSchema: unknown; fewShotMessages: Array<{ role: "user" | "assistant"; content: string }>; userMessage: string; maxTokens: number },
 ): Promise<FillResult> {
   const { model, systemPrompt, toolSchema, fewShotMessages, userMessage, maxTokens } = args;
@@ -87,16 +91,16 @@ async function callClaude(
         type: "text",
         text: systemPrompt,
         cache_control: { type: "ephemeral" },
-      } as Anthropic.TextBlockParam,
+      } as AnthropicType.TextBlockParam,
     ],
     tools: [
       {
         name: "fill_note",
         description:
           "Return the structured field_values extracted from the dental encounter transcript.",
-        input_schema: toolSchema as Anthropic.Tool.InputSchema,
+        input_schema: toolSchema as AnthropicType.Tool.InputSchema,
         cache_control: { type: "ephemeral" },
-      } as Anthropic.Tool,
+      } as AnthropicType.Tool,
     ],
     tool_choice: { type: "tool", name: "fill_note" },
     messages: [
@@ -106,7 +110,7 @@ async function callClaude(
   });
 
   const toolUseBlock = response.content.find(
-    (block): block is Anthropic.ToolUseBlock => block.type === "tool_use",
+    (block): block is AnthropicType.ToolUseBlock => block.type === "tool_use",
   );
   if (!toolUseBlock) {
     throw new Error("Claude returned no tool_use block");

@@ -88,6 +88,15 @@ export type AiConfidence = "high" | "inferred" | "missing" | null;
 /** Provenance of the current field value. "user" never gets overwritten by AI. */
 export type FieldValueSource = "ai" | "user" | "ai+user";
 
+/**
+ * How well the extracted value maps to the template's picklist options.
+ *   - "exact"    : Value matches a picklist option verbatim.
+ *   - "unmapped" : Value was clearly heard in the transcript but doesn't match any picklist option.
+ *                  Placed in qualifier for doctor review (e.g. "Dr. Patel" when picklist has "Dr. Parul Aggarwal, DDS").
+ *   - "missing"  : Field was not mentioned in the transcript at all.
+ */
+export type MappingStatus = "exact" | "unmapped" | "missing";
+
 export interface FieldValue {
   /** Picklist part. Type depends on the field's PicklistSpec.kind. */
   picklist: string | string[] | number | boolean | null;
@@ -95,6 +104,12 @@ export interface FieldValue {
   qualifier: string | null;
   ai_confidence: AiConfidence;
   source: FieldValueSource;
+  /**
+   * How the extracted value maps to the template's allowed picklist options.
+   * Set by Claude during extraction; overridden to "exact" when the user
+   * manually selects a picklist value.
+   */
+  mapping_status: MappingStatus;
 }
 
 // ---------- Audio segments ----------

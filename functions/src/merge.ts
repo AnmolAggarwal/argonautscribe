@@ -8,13 +8,14 @@
  * See SPEC §6.3 + §10.3 step 12 for the canonical rules.
  */
 
-import type { AiConfidence, FieldValue } from "./types";
+import type { AiConfidence, FieldValue, MappingStatus } from "./types";
 
 /** What the LLM returns per field (no `source` — we set that here). */
 export interface AiFieldValue {
   picklist: FieldValue["picklist"];
   qualifier: string | null;
   ai_confidence: AiConfidence;
+  mapping_status: MappingStatus;
 }
 
 export function mergeFieldValues(
@@ -41,6 +42,7 @@ export function mergeFieldValues(
       qualifier: aiValue.qualifier,
       ai_confidence: aiValue.ai_confidence,
       source: prior ? "ai+user" : "ai",
+      mapping_status: aiValue.mapping_status ?? "missing",
     };
   }
 

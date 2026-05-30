@@ -30,6 +30,7 @@ For each field, return:
   - picklist: the structured value (from the allowed options, or a number, or null if not mentioned)
   - qualifier: a free-text tail rendered on the same line as the picklist value (or null)
   - ai_confidence: "high" if explicitly stated, "inferred" if reasonably inferred from context, "missing" if not mentioned
+  - mapping_status: "exact" if the value matches a picklist option verbatim, "unmapped" if the value was clearly stated but does not match any allowed option (put it in qualifier instead), "missing" if the field was not mentioned at all
 
 Fields in this template:
 ${fieldLines}${templateSection}
