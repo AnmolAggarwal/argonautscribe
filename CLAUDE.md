@@ -550,7 +550,7 @@ A pointer guide to the codebase (once it exists):
 | How does audio get uploaded? | Web: `apps/web/src/lib/upload.ts`. iOS: `Services/StorageService.swift` |
 | How does the offline queue work? | Web: not implemented (always online on workstation). iOS: Firestore SDK offline persistence + background `URLSession` for uploads |
 | Where is the iOS app spec? | `docs/MOBILE-APP-SPEC.md` |
-| Where is the iOS format-string renderer? | `apps/ios/ArgonautScribe/Services/RenderService.swift` (Swift port of `shared/src/format.ts`) |
+| Where is the iOS format-string renderer? | `apps/ArgonautScribe/ArgonautScribe/Services/RenderService.swift` (Swift port of `shared/src/format.ts`) |
 | What happens when an audio segment finishes uploading? | `functions/src/processSegment.ts` |
 | How is the LLM prompt built? | `functions/src/prompts/buildPrompt.ts` |
 | Where are template format strings rendered? | `shared/src/format.ts` |

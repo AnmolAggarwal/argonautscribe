@@ -17,9 +17,12 @@ let package = Package(
                 .product(name: "FirebaseFirestore", package: "firebase-ios-sdk"),
                 .product(name: "FirebaseStorage", package: "firebase-ios-sdk"),
                 .product(name: "FirebaseFunctions", package: "firebase-ios-sdk"),
-                .product(name: "FirebaseMessaging", package: "firebase-ios-sdk"),
             ],
-            path: "ArgonautScribe"
+            path: "ArgonautScribe",
+            resources: [
+                .copy("GoogleService-Info.plist"),
+                .process("Resources"),
+            ]
         ),
     ]
 )
