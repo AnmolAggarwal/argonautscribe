@@ -16,7 +16,7 @@ const SENTINEL_TS = { seconds: 0, nanoseconds: 0 };
 
 export const CROWN_PREP_TEMPLATE: Template = {
   template_id: CROWN_PREP_TEMPLATE_ID,
-  name: "Crown Prep",
+  name: "Restorations",
   version: 1,
   fields: [
     {

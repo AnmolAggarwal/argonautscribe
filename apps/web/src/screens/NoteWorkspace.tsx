@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { doc, getDoc, onSnapshot } from "firebase/firestore";
 import { render, validateNote } from "@argonaut/shared";
 import type { FieldValue, Note, PatientTag, Template, ValidationResult } from "@argonaut/shared";
 import { db } from "../lib/firebase";
 import { useAuth } from "../lib/auth";
-import { markFiled, writeFieldValue, writePatientTag } from "../lib/notes";
+import { markFiled, writeFieldValue, writeFinalNoteText, writePatientTag } from "../lib/notes";
 import { FieldRow } from "../components/FieldRow";
 import { RecordingPanel } from "../components/RecordingPanel";
 
@@ -29,6 +29,8 @@ export function NoteWorkspace() {
   const [template, setTemplate] = useState<Template | null>(null);
   const [tag, setTag] = useState<string>("");
   const [copyState, setCopyState] = useState<"idle" | "copied">("idle");
+  const [previewText, setPreviewText] = useState("");
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Subscribe to the note doc.
   useEffect(() => {
@@ -89,10 +91,15 @@ export function NoteWorkspace() {
     return render(template, note.field_values);
   }, [template, note]);
 
+  // Sync preview text when fields or Generate produce new rendered output.
+  useEffect(() => {
+    if (renderedNote) setPreviewText(renderedNote);
+  }, [renderedNote]);
+
   const validation: ValidationResult | null = useMemo(() => {
-    if (!template || !note || !renderedNote) return null;
-    return validateNote(template, note.field_values, renderedNote);
-  }, [template, note, renderedNote]);
+    if (!template || !note || !previewText) return null;
+    return validateNote(template, note.field_values, previewText);
+  }, [template, note, previewText]);
 
   if (!user || !clinician || !note || !template) {
     return (
@@ -122,9 +129,34 @@ export function NoteWorkspace() {
     }
   }
 
+  const savePreviewText = useCallback(
+    (text: string) => {
+      if (!user || !note) return;
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => {
+        writeFinalNoteText(user.uid, note.note_id, text).catch((err) =>
+          console.error("writeFinalNoteText failed:", err),
+        );
+      }, 600);
+    },
+    [user, note],
+  );
+
+  function handlePreviewEdit(text: string): void {
+    setPreviewText(text);
+    savePreviewText(text);
+  }
+
   async function handleCopy(): Promise<void> {
     try {
-      await navigator.clipboard.writeText(renderedNote);
+      // Flush any pending debounced save.
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+        if (user && note) {
+          await writeFinalNoteText(user.uid, note.note_id, previewText);
+        }
+      }
+      await navigator.clipboard.writeText(previewText);
       setCopyState("copied");
       window.setTimeout(() => setCopyState("idle"), 1500);
     } catch (err) {
@@ -253,20 +285,25 @@ export function NoteWorkspace() {
 
         <section>
           <h3 style={{ marginTop: 0 }}>Preview</h3>
-          <pre
+          <textarea
+            value={previewText}
+            onChange={(e) => handlePreviewEdit(e.target.value)}
+            placeholder="(empty — fill in fields or generate to see the assembled note)"
             style={{
+              width: "100%",
               background: "#f5f5f5",
               padding: "1rem",
               borderRadius: 4,
+              border: "1px solid #ddd",
               whiteSpace: "pre-wrap",
               fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
               fontSize: "0.9rem",
               minHeight: 200,
-              color: renderedNote ? "inherit" : "#999",
+              resize: "vertical",
+              boxSizing: "border-box",
+              color: previewText ? "inherit" : "#999",
             }}
-          >
-            {renderedNote || "(empty — fill in fields to see the assembled note)"}
-          </pre>
+          />
 
           {/* Validation warnings */}
           {validation && validation.issues.length > 0 && (
@@ -310,12 +347,12 @@ export function NoteWorkspace() {
           <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem" }}>
             <button
               onClick={() => void handleCopy()}
-              disabled={!renderedNote || (validation != null && !validation.safe_to_copy)}
+              disabled={!previewText || (validation != null && !validation.safe_to_copy)}
               style={{
                 padding: "0.6rem 1rem",
                 flex: 1,
                 cursor:
-                  renderedNote && (validation == null || validation.safe_to_copy)
+                  previewText && (validation == null || validation.safe_to_copy)
                     ? "pointer"
                     : "not-allowed",
                 opacity:

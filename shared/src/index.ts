@@ -6,3 +6,5 @@ export * from "./fixtures/toy-template";
 export * from "./fixtures/cementation-template";
 export * from "./fixtures/crown-prep-template";
 export * from "./fixtures/general-template";
+export * from "./fixtures/prophylaxis-template";
+export * from "./fixtures/new-patient-exam-template";

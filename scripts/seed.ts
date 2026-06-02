@@ -39,6 +39,14 @@ import {
   GENERAL_TEMPLATE_ID,
   GENERAL_TEMPLATE,
 } from "../shared/src/fixtures/general-template";
+import {
+  PROPHYLAXIS_TEMPLATE_ID,
+  PROPHYLAXIS_TEMPLATE,
+} from "../shared/src/fixtures/prophylaxis-template";
+import {
+  NEW_PATIENT_EXAM_TEMPLATE_ID,
+  NEW_PATIENT_EXAM_TEMPLATE,
+} from "../shared/src/fixtures/new-patient-exam-template";
 
 const projectId = process.env.GCLOUD_PROJECT ?? "argonautscribe";
 
@@ -142,6 +150,40 @@ async function seedGeneralTemplate(): Promise<void> {
   console.log(`  versions/${GENERAL_TEMPLATE.version} — archived`);
 }
 
+async function seedProphylaxisTemplate(): Promise<void> {
+  const ref = db.doc(`practices/${TOY_PRACTICE_ID}/templates/${PROPHYLAXIS_TEMPLATE_ID}`);
+
+  const docData = {
+    ...PROPHYLAXIS_TEMPLATE,
+    created_at: FieldValue.serverTimestamp(),
+    updated_at: FieldValue.serverTimestamp(),
+  };
+
+  await ref.set(docData);
+  console.log(`practices/${TOY_PRACTICE_ID}/templates/${PROPHYLAXIS_TEMPLATE_ID} — written (v${PROPHYLAXIS_TEMPLATE.version})`);
+
+  const versionRef = ref.collection("versions").doc(String(PROPHYLAXIS_TEMPLATE.version));
+  await versionRef.set(docData);
+  console.log(`  versions/${PROPHYLAXIS_TEMPLATE.version} — archived`);
+}
+
+async function seedNewPatientExamTemplate(): Promise<void> {
+  const ref = db.doc(`practices/${TOY_PRACTICE_ID}/templates/${NEW_PATIENT_EXAM_TEMPLATE_ID}`);
+
+  const docData = {
+    ...NEW_PATIENT_EXAM_TEMPLATE,
+    created_at: FieldValue.serverTimestamp(),
+    updated_at: FieldValue.serverTimestamp(),
+  };
+
+  await ref.set(docData);
+  console.log(`practices/${TOY_PRACTICE_ID}/templates/${NEW_PATIENT_EXAM_TEMPLATE_ID} — written (v${NEW_PATIENT_EXAM_TEMPLATE.version})`);
+
+  const versionRef = ref.collection("versions").doc(String(NEW_PATIENT_EXAM_TEMPLATE.version));
+  await versionRef.set(docData);
+  console.log(`  versions/${NEW_PATIENT_EXAM_TEMPLATE.version} — archived`);
+}
+
 async function seedClinician(uid: string): Promise<void> {
   const ref = db.doc(`clinicians/${uid}`);
   const snap = await ref.get();
@@ -167,6 +209,8 @@ async function main(): Promise<void> {
   await seedCementationTemplate();
   await seedCrownPrepTemplate();
   await seedGeneralTemplate();
+  await seedProphylaxisTemplate();
+  await seedNewPatientExamTemplate();
 
   const { clinicianUid } = parseArgs();
   if (clinicianUid) {

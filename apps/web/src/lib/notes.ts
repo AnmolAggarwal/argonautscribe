@@ -96,6 +96,19 @@ export async function writeFieldValue(
   );
 }
 
+/** Save manually edited final note text to Firestore. */
+export async function writeFinalNoteText(
+  clinicianUid: string,
+  noteId: string,
+  text: string,
+): Promise<void> {
+  await setDoc(
+    doc(db, "clinicians", clinicianUid, "notes", noteId),
+    { final_note_text: text, updated_at: serverTimestamp() },
+    { merge: true },
+  );
+}
+
 /** Upsert the patient tag for a note. Tag is PHI. */
 export async function writePatientTag(
   clinicianUid: string,
