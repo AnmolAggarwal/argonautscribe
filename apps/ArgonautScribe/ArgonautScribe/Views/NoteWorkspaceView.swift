@@ -21,6 +21,15 @@ struct NoteWorkspaceView: View {
         return RenderService.render(template: template, fieldValues: note.fieldValues)
     }
 
+    private var validation: ValidationResult {
+        guard let template, let note else {
+            return ValidationResult(safeToCopy: false, issues: [])
+        }
+        return ValidateService.validateNote(
+            template: template, fieldValues: note.fieldValues, renderedNote: renderedNote
+        )
+    }
+
     var body: some View {
         Group {
             if let note, let template {
@@ -113,6 +122,38 @@ struct NoteWorkspaceView: View {
                         .background(.gray.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
                 }
 
+                // Validation warnings
+                if !validation.issues.isEmpty {
+                    let blocking = validation.issues.filter { $0.severity == .blocking }
+                    let warnings = validation.issues.filter { $0.severity == .warning }
+
+                    if !blocking.isEmpty {
+                        VStack(alignment: .leading, spacing: 4) {
+                            ForEach(blocking, id: \.field) { issue in
+                                Label(issue.message, systemImage: "xmark.circle.fill")
+                                    .font(.caption)
+                                    .foregroundStyle(.red)
+                            }
+                        }
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+                    }
+
+                    if !warnings.isEmpty {
+                        VStack(alignment: .leading, spacing: 4) {
+                            ForEach(warnings, id: \.field) { issue in
+                                Label(issue.message, systemImage: "exclamationmark.triangle.fill")
+                                    .font(.caption)
+                                    .foregroundStyle(.orange)
+                            }
+                        }
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+                    }
+                }
+
                 // Actions
                 HStack(spacing: 12) {
                     Button {
@@ -130,7 +171,7 @@ struct NoteWorkspaceView: View {
                         .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(renderedNote.isEmpty)
+                    .disabled(renderedNote.isEmpty || !validation.safeToCopy)
 
                     Button(role: .destructive) {
                         showFiledAlert = true
@@ -173,6 +214,7 @@ struct NoteWorkspaceView: View {
             "qualifier": value.qualifier ?? NSNull(),
             "ai_confidence": value.aiConfidence ?? NSNull(),
             "source": "user",
+            "mapping_status": "exact",
         ]
 
         try? await FirestoreService.writeFieldValue(

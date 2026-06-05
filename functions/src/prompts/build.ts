@@ -41,7 +41,8 @@ Rules:
   - Use the qualifier for specifics that don't fit the picklist (counts, locations, qualifiers like "generalized" or "more on lowers").
   - Some user-set field values may be provided in the user message — match your output to those values where they exist; do not contradict them.
   - Return field_values for ALL listed fields, even if missing.
-  - If the transcript contains clinically relevant details that do not fit any structured field, place them in the additional_notes qualifier. Do not discard information from the transcript.`;
+  - Do NOT repeat in any free-text or qualifier field information that is already captured in a structured picklist field. Each fact should appear exactly once, in the most specific field available.
+  - If the transcript contains clinically relevant details that do not fit any structured field, place them in the additional_notes or dr_exam qualifier. Do not discard information from the transcript.`;
 }
 
 /**

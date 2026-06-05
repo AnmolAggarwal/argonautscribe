@@ -11,9 +11,21 @@ struct FieldRowView: View {
     @State private var qualifier: String = ""
     @State private var showPicker = false
 
+    private var level: ReviewLevel {
+        ValidateService.reviewLevel(fieldRequired: field.required, value: value)
+    }
+
+    private var borderColor: Color {
+        switch level {
+        case .red: .red
+        case .yellow: .orange
+        case .none: Color(.systemGray4)
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            // Label
+            // Label + review chip
             HStack {
                 Text(field.label)
                     .font(.subheadline.weight(.medium))
@@ -24,11 +36,20 @@ struct FieldRowView: View {
 
                 Spacer()
 
-                // Confidence badge
-                if let conf = value?.aiConfidence, conf != "missing" {
-                    Text(conf)
-                        .font(.caption2)
-                        .foregroundStyle(conf == "high" ? .green : .orange)
+                if level == .red {
+                    Text("Review")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(.red, in: Capsule())
+                } else if level == .yellow {
+                    Text("Check")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(.orange, in: Capsule())
                 }
             }
 
@@ -50,6 +71,12 @@ struct FieldRowView: View {
             }
         }
         .padding(.vertical, 4)
+        .padding(.leading, 8)
+        .overlay(alignment: .leading) {
+            RoundedRectangle(cornerRadius: 2)
+                .fill(borderColor)
+                .frame(width: 3)
+        }
         .onAppear { syncFromValue() }
         .onChange(of: value?.picklist?.displayString) { _, _ in syncFromValue() }
     }
@@ -186,7 +213,8 @@ struct FieldRowView: View {
             picklist: pv,
             qualifier: qualifier.isEmpty ? nil : qualifier,
             aiConfidence: nil,
-            source: "user"
+            source: "user",
+            mappingStatus: "exact"
         )
         onChange(fv)
     }

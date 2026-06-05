@@ -8,3 +8,4 @@ export * from "./fixtures/crown-prep-template";
 export * from "./fixtures/general-template";
 export * from "./fixtures/prophylaxis-template";
 export * from "./fixtures/new-patient-exam-template";
+export * from "./fixtures/soap-template";

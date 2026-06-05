@@ -38,12 +38,14 @@ struct FieldValue: Codable {
     var qualifier: String?
     var aiConfidence: String?
     var source: String?
+    var mappingStatus: String?
 
     enum CodingKeys: String, CodingKey {
         case picklist
         case qualifier
         case aiConfidence = "ai_confidence"
         case source
+        case mappingStatus = "mapping_status"
     }
 }
 

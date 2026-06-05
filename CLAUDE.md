@@ -4,7 +4,7 @@ This document is the working-context file for anyone — human developer or AI a
 
 **Read this entire document before writing any code.** Several of the rules below are load-bearing for the privacy posture of the system, and violating them would break the entire compliance design.
 
-> **Status (2026-05-30):** Web MVP is functional (auth, notes CRUD, recording, Deepgram STT, Claude extraction, format-string rendering, deterministic validation with copy warnings, deploy to Firebase Hosting). Templates: Cementation, Crown Prep, General. iOS native app scaffolded (SwiftUI, Firebase SDK integrated, builds on device). **Remaining for pilot:** seed templates to Firestore, few-shot examples from real dictations, end-to-end test with real audio, TestFlight build.
+> **Status (2026-06-03):** Web MVP is functional (auth, notes CRUD, recording, Deepgram STT, Claude extraction, format-string rendering, deterministic validation with copy warnings, editable preview textarea, deploy to Firebase Hosting). Templates seeded to Firestore: Cementation, Restorations (formerly Crown Prep), General, Prophylaxis, New Patient Exam, SOAP Note. iOS native app has auth, notes CRUD, recording, field editing with review-level chips and validation. **Remaining for pilot:** few-shot examples from real dictations, deploy latest functions + hosting, TestFlight build.
 
 ---
 
@@ -145,7 +145,7 @@ ArgonautScribe/
 │           ├── App/             # ArgonautScribeApp.swift, RootView.swift
 │           ├── Models/          # Note, Template, Clinician, PatientTag, Segment (Swift ports)
 │           ├── Views/           # SignInView, NotesListView, NoteWorkspaceView, FieldRowView, RecordingControlsView
-│           ├── Services/        # AuthService, FirestoreService, StorageService, AudioRecorderService, RenderService
+│           ├── Services/        # AuthService, FirestoreService, StorageService, AudioRecorderService, RenderService, ValidateService
 │           ├── Utilities/       # Constants.swift
 │           ├── Assets.xcassets  # App icon (1024x1024)
 │           └── GoogleService-Info.plist  # GITIGNORED — add manually
@@ -174,8 +174,11 @@ ArgonautScribe/
 │   │   ├── validate.ts          # validateNote(), reviewLevel()
 │   │   └── fixtures/            # Template definitions
 │   │       ├── cementation-template.ts
-│   │       ├── crown-prep-template.ts
+│   │       ├── crown-prep-template.ts  # Display name: "Restorations"
 │   │       ├── general-template.ts
+│   │       ├── new-patient-exam-template.ts
+│   │       ├── prophylaxis-template.ts
+│   │       ├── soap-template.ts
 │   │       └── toy-template.ts
 │   └── package.json
 ├── scripts/
@@ -629,7 +632,7 @@ A pointer guide to the codebase (once it exists):
 | Where does AI merge happen? | `functions/src/merge.ts` — merges AI field values with user-set values, respects source provenance |
 | Where is the deterministic validator? | `shared/src/validate.ts` (source of truth) + `functions/src/validate.ts` (CJS copy) |
 | Where are template format strings rendered? | `shared/src/format.ts` |
-| Where are template fixtures? | `shared/src/fixtures/` — cementation, crown-prep, general, toy templates |
+| Where are template fixtures? | `shared/src/fixtures/` — cementation, crown-prep (Restorations), general, prophylaxis, new-patient-exam, soap, toy |
 | Where are the few-shot examples per template? | In template fixture files and seeded to Firestore via `scripts/seed.ts` |
 | Where are security rules? | `firestore/firestore.rules`, `firestore/storage.rules` |
 | Where do I add a new template? | Create a fixture in `shared/src/fixtures/`, export from `shared/src/index.ts`, add to `scripts/seed.ts` |
@@ -653,6 +656,7 @@ locally and are auto-loaded by Claude at session start.
 | `project-status-2026-05-30.md` | Full inventory of what's built (web, functions, shared, iOS), key architecture decisions, and remaining items for pilot |
 | `validation-and-mapping-status.md` | `mapping_status` field design, deterministic validator, what was adopted vs rejected from ChatGPT's review |
 | `ios-app-patterns.md` | Xcode project (not SPM), Swift 6 concurrency patterns, SDK compatibility gotchas, model/renderer sync |
+| `feedback-no-xcode-builds.md` | Never run xcodebuild from Claude Code; user builds manually to save tokens |
 
 When making significant architectural decisions or learning new project context, create or
 update memory files so future sessions don't re-derive the same knowledge.
@@ -695,7 +699,11 @@ If a core invariant in §2 changes through a deliberate design decision (recorde
 
 Do NOT make calls to external paid APIs (Anthropic, Deepgram, OpenAI) from scripts, curl, or test code unless the user explicitly asks you to. These calls cost real money. If the user wants to test an API integration, prepare the script/command and let them run it manually, or ask before executing.
 
-### 12.9 If unsure, ask
+### 12.9 Never run xcodebuild
+
+Do NOT run `xcodebuild`, `swift build`, or any iOS compile step from Claude Code. The user builds the iOS app manually in Xcode. Xcode builds are slow, produce huge output, and waste tokens. After editing Swift files, describe what changed and let the user build.
+
+### 12.10 If unsure, ask
 
 Better to ask a clarifying question than to guess at user intent. Especially for: privacy-relevant changes, schema changes that affect Firestore documents in production, prompt changes that affect LLM accuracy.
 
