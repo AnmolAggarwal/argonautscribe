@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy - ArgonautScribe</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; line-height: 1.7; color: #333; }
+    h1 { font-size: 1.6rem; margin-bottom: 0.25rem; }
+    h2 { font-size: 1.15rem; margin-top: 2rem; }
+    .date { color: #888; font-size: 0.9rem; margin-bottom: 2rem; }
+    ul { padding-left: 1.4rem; }
+    li { margin-bottom: 0.3rem; }
+    a { color: #2563eb; }
+  </style>
+</head>
+<body>
+  <h1>ArgonautScribe Privacy Policy</h1>
+  <p class="date">Effective date: June 5, 2026</p>
+
+  <p>ArgonautScribe ("we", "our", "the app") is a clinical documentation tool for dental practices. This policy explains what data we collect, how we use it, and how we protect it.</p>
+
+  <h2>1. Data We Collect</h2>
+  <ul>
+    <li><strong>Email address</strong> — used for authentication (sign-in) only.</li>
+    <li><strong>Audio recordings</strong> — captured on your device when you dictate clinical notes. Audio is transmitted to our speech-to-text provider for transcription and is <strong>deleted immediately</strong> after transcription completes. A 24-hour lifecycle rule on our storage bucket acts as a safety net.</li>
+    <li><strong>Clinical note content</strong> — transcripts, structured field values, and rendered notes stored in your account. This content is clinical in nature and is used solely to produce documentation for your practice.</li>
+    <li><strong>Patient identifiers</strong> — the optional "patient tag" field is stored in an isolated database subcollection. It is <strong>never</strong> transmitted to any third-party service, including our speech-to-text and AI providers.</li>
+  </ul>
+
+  <h2>2. How We Use Your Data</h2>
+  <ul>
+    <li><strong>Speech-to-text transcription</strong> — audio is sent to Deepgram Inc. for transcription using their Nova-3 Medical model. Deepgram processes audio under a HIPAA Business Associate Agreement (BAA). Audio is not retained by Deepgram after processing.</li>
+    <li><strong>AI-assisted note structuring</strong> — transcripts (without patient identifiers) are sent to Anthropic PBC for structured field extraction using Claude. Anthropic processes data under a HIPAA BAA. Anthropic does not use your data for model training.</li>
+    <li><strong>Data storage</strong> — notes, transcripts, and account data are stored in Google Firebase (Firestore) under a HIPAA BAA. Data is encrypted at rest and in transit.</li>
+  </ul>
+
+  <h2>3. Data We Never Collect or Share</h2>
+  <ul>
+    <li>We do not sell, rent, or share your data with advertisers or data brokers.</li>
+    <li>We do not use your data for advertising or marketing purposes.</li>
+    <li>We do not use your clinical data for AI model training.</li>
+    <li>We do not track you across apps or websites.</li>
+    <li>Patient identifiers are never sent to third-party APIs.</li>
+  </ul>
+
+  <h2>4. Data Retention and Deletion</h2>
+  <ul>
+    <li><strong>Audio recordings</strong> are deleted immediately after transcription. A 24-hour lifecycle rule ensures deletion even if processing fails.</li>
+    <li><strong>Notes</strong> can be deleted at any time using the "Mark Filed" feature, which permanently removes the note, transcript, and patient tag.</li>
+    <li><strong>Account deletion</strong> — you can delete your account from within the app. This permanently removes your account, all notes, patient tags, and associated data. Account deletion is irreversible.</li>
+  </ul>
+
+  <h2>5. Security</h2>
+  <ul>
+    <li>All data is encrypted in transit (TLS) and at rest.</li>
+    <li>Authentication is handled by Firebase Authentication.</li>
+    <li>Database access is controlled by per-user security rules — you can only access your own data.</li>
+    <li>HIPAA Business Associate Agreements are in place with all third-party data processors (Google/Firebase, Deepgram, Anthropic).</li>
+  </ul>
+
+  <h2>6. Third-Party Services</h2>
+  <ul>
+    <li><strong>Google Firebase</strong> (authentication, database, file storage, hosting) — <a href="https://firebase.google.com/support/privacy">Privacy Policy</a></li>
+    <li><strong>Deepgram</strong> (speech-to-text) — <a href="https://deepgram.com/privacy">Privacy Policy</a></li>
+    <li><strong>Anthropic</strong> (AI text processing) — <a href="https://www.anthropic.com/privacy">Privacy Policy</a></li>
+  </ul>
+
+  <h2>7. Children's Privacy</h2>
+  <p>ArgonautScribe is designed for use by licensed dental professionals. We do not knowingly collect data from children under 13.</p>
+
+  <h2>8. Changes to This Policy</h2>
+  <p>We may update this policy from time to time. Changes will be posted on this page with an updated effective date.</p>
+
+  <h2>9. Contact</h2>
+  <p>For questions about this privacy policy or to request data deletion, contact us at: <strong>privacy@argonautscribe.com</strong></p>
+</body>
+</html>

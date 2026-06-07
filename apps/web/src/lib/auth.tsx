@@ -21,8 +21,9 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut as firebaseSignOut,
+  deleteUser,
 } from "firebase/auth";
-import { doc, onSnapshot } from "firebase/firestore";
+import { doc, onSnapshot, collection, getDocs, deleteDoc } from "firebase/firestore";
 import { Navigate, useLocation } from "react-router-dom";
 import type { Clinician } from "@argonaut/shared";
 import { auth, db } from "./firebase";
@@ -34,6 +35,7 @@ interface AuthState {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  deleteAccount: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -87,6 +89,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     signOut: async () => {
       await firebaseSignOut(auth);
+    },
+    deleteAccount: async () => {
+      if (!user) return;
+      const uid = user.uid;
+      // Delete all notes and their segments
+      const notesSnap = await getDocs(collection(db, "clinicians", uid, "notes"));
+      for (const noteDoc of notesSnap.docs) {
+        const segsSnap = await getDocs(collection(noteDoc.ref, "segments"));
+        for (const seg of segsSnap.docs) await deleteDoc(seg.ref);
+        await deleteDoc(noteDoc.ref);
+      }
+      // Delete all patient tags
+      const tagsSnap = await getDocs(collection(db, "clinicians", uid, "patient_tags"));
+      for (const tagDoc of tagsSnap.docs) await deleteDoc(tagDoc.ref);
+      // Delete clinician profile
+      await deleteDoc(doc(db, "clinicians", uid));
+      // Delete Firebase Auth user (must be last)
+      await deleteUser(user);
     },
   };
 

@@ -56,4 +56,39 @@ final class AuthService {
     func signOut() throws {
         try Auth.auth().signOut()
     }
+
+    /// Delete the current user's account and all associated data.
+    /// Deletes: all notes (and their segments), all patient tags, clinician doc, then Firebase Auth user.
+    func deleteAccount() async throws {
+        guard let user else { throw AuthError.notSignedIn }
+        let uid = user.uid
+        let db = Firestore.firestore()
+
+        // 1. Delete all notes and their segment subcollections
+        let notesSnap = try await db.collection("clinicians/\(uid)/notes").getDocuments()
+        for noteDoc in notesSnap.documents {
+            let segSnap = try await noteDoc.reference.collection("segments").getDocuments()
+            for seg in segSnap.documents { try await seg.reference.delete() }
+            try await noteDoc.reference.delete()
+        }
+
+        // 2. Delete all patient tags
+        let tagsSnap = try await db.collection("clinicians/\(uid)/patient_tags").getDocuments()
+        for tagDoc in tagsSnap.documents { try await tagDoc.reference.delete() }
+
+        // 3. Delete clinician profile
+        try await db.document("clinicians/\(uid)").delete()
+
+        // 4. Delete Firebase Auth user (must be last — loses auth)
+        try await user.delete()
+    }
+}
+
+enum AuthError: LocalizedError {
+    case notSignedIn
+    var errorDescription: String? {
+        switch self {
+        case .notSignedIn: return "No user is signed in."
+        }
+    }
 }

@@ -11,13 +11,19 @@ enum StorageService {
     static func uploadSegment(
         noteId: String,
         segmentId: String,
-        fileURL: URL
+        fileURL: URL,
+        clinicianUid: String
     ) async throws -> String {
         let path = "notes/\(noteId)/segments/\(segmentId)"
         let ref = storage.reference().child(path)
 
         let metadata = StorageMetadata()
         metadata.contentType = "audio/m4a"
+        metadata.customMetadata = [
+            "clinician_id": clinicianUid,
+            "note_id": noteId,
+            "segment_id": segmentId,
+        ]
 
         // putFileAsync returns non-Sendable StorageMetadata; wrap in
         // a nonisolated(unsafe) let to silence the Swift 6 data-race warning.

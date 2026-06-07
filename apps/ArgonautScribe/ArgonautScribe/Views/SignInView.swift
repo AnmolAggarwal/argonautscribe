@@ -13,9 +13,10 @@ struct SignInView: View {
 
             Text("Argonaut Scribe")
                 .font(.largeTitle.bold())
+                .foregroundStyle(Theme.plum)
 
             Text("Sign in to your account")
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Theme.textSecondary)
 
             VStack(spacing: 12) {
                 TextField("Email", text: $email)
@@ -47,6 +48,7 @@ struct SignInView: View {
                 }
             }
             .buttonStyle(.borderedProminent)
+            .tint(Theme.plum)
             .padding(.horizontal)
             .disabled(email.isEmpty || password.isEmpty || isLoading)
 

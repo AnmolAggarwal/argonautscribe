@@ -171,6 +171,7 @@ struct NoteWorkspaceView: View {
                         .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
+                    .tint(Theme.gold)
                     .disabled(renderedNote.isEmpty || !validation.safeToCopy)
 
                     Button(role: .destructive) {

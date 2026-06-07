@@ -18,9 +18,22 @@
 		5D427F482FCAB28D00B2C664 /* ArgonautScribe.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ArgonautScribe.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		5DC4103B2FD380A700333B01 /* Exceptions for "ArgonautScribe" folder in "ArgonautScribe" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 5D427F472FCAB28D00B2C664 /* ArgonautScribe */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		5D427F4A2FCAB28D00B2C664 /* ArgonautScribe */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				5DC4103B2FD380A700333B01 /* Exceptions for "ArgonautScribe" folder in "ArgonautScribe" target */,
+			);
 			path = ArgonautScribe;
 			sourceTree = "<group>";
 		};
@@ -283,7 +296,9 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ArgonautScribe/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = ArgonautScribe;
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "ArgonautScribe records your dictation to create clinical notes. Audio is deleted after transcription.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -329,7 +344,9 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ArgonautScribe/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = ArgonautScribe;
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "ArgonautScribe records your dictation to create clinical notes. Audio is deleted after transcription.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;

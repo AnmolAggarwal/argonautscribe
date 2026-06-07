@@ -22,11 +22,7 @@
 
 import { initializeApp, applicationDefault } from "firebase-admin/app";
 import { getFirestore, FieldValue, Timestamp } from "firebase-admin/firestore";
-import {
-  TOY_PRACTICE_ID,
-  TOY_TEMPLATE_ID,
-  TOY_TEMPLATE,
-} from "../shared/src/fixtures/toy-template";
+import { PRACTICE_ID } from "../shared/src/constants";
 import {
   CEMENTATION_TEMPLATE_ID,
   CEMENTATION_TEMPLATE,
@@ -71,40 +67,22 @@ function parseArgs(): { clinicianUid: string | null } {
 }
 
 async function seedPractice(): Promise<void> {
-  const ref = db.doc(`practices/${TOY_PRACTICE_ID}`);
+  const ref = db.doc(`practices/${PRACTICE_ID}`);
   const snap = await ref.get();
   if (snap.exists) {
-    console.log(`practices/${TOY_PRACTICE_ID} — already exists, skipping`);
+    console.log(`practices/${PRACTICE_ID} — already exists, skipping`);
     return;
   }
   await ref.set({
-    practice_id: TOY_PRACTICE_ID,
+    practice_id: PRACTICE_ID,
     name: "Argonaut Practice (dev)",
     created_at: FieldValue.serverTimestamp(),
   });
-  console.log(`practices/${TOY_PRACTICE_ID} — created`);
-}
-
-async function seedTemplate(): Promise<void> {
-  const ref = db.doc(`practices/${TOY_PRACTICE_ID}/templates/${TOY_TEMPLATE_ID}`);
-
-  const docData = {
-    ...TOY_TEMPLATE,
-    created_at: FieldValue.serverTimestamp(),
-    updated_at: FieldValue.serverTimestamp(),
-  };
-
-  await ref.set(docData);
-  console.log(`practices/${TOY_PRACTICE_ID}/templates/${TOY_TEMPLATE_ID} — written (v${TOY_TEMPLATE.version})`);
-
-  // Archive v1 under versions/ so older notes can re-render against it.
-  const versionRef = ref.collection("versions").doc(String(TOY_TEMPLATE.version));
-  await versionRef.set(docData);
-  console.log(`  versions/${TOY_TEMPLATE.version} — archived`);
+  console.log(`practices/${PRACTICE_ID} — created`);
 }
 
 async function seedCementationTemplate(): Promise<void> {
-  const ref = db.doc(`practices/${TOY_PRACTICE_ID}/templates/${CEMENTATION_TEMPLATE_ID}`);
+  const ref = db.doc(`practices/${PRACTICE_ID}/templates/${CEMENTATION_TEMPLATE_ID}`);
 
   const docData = {
     ...CEMENTATION_TEMPLATE,
@@ -113,7 +91,7 @@ async function seedCementationTemplate(): Promise<void> {
   };
 
   await ref.set(docData);
-  console.log(`practices/${TOY_PRACTICE_ID}/templates/${CEMENTATION_TEMPLATE_ID} — written (v${CEMENTATION_TEMPLATE.version})`);
+  console.log(`practices/${PRACTICE_ID}/templates/${CEMENTATION_TEMPLATE_ID} — written (v${CEMENTATION_TEMPLATE.version})`);
 
   const versionRef = ref.collection("versions").doc(String(CEMENTATION_TEMPLATE.version));
   await versionRef.set(docData);
@@ -121,7 +99,7 @@ async function seedCementationTemplate(): Promise<void> {
 }
 
 async function seedCrownPrepTemplate(): Promise<void> {
-  const ref = db.doc(`practices/${TOY_PRACTICE_ID}/templates/${CROWN_PREP_TEMPLATE_ID}`);
+  const ref = db.doc(`practices/${PRACTICE_ID}/templates/${CROWN_PREP_TEMPLATE_ID}`);
 
   const docData = {
     ...CROWN_PREP_TEMPLATE,
@@ -130,7 +108,7 @@ async function seedCrownPrepTemplate(): Promise<void> {
   };
 
   await ref.set(docData);
-  console.log(`practices/${TOY_PRACTICE_ID}/templates/${CROWN_PREP_TEMPLATE_ID} — written (v${CROWN_PREP_TEMPLATE.version})`);
+  console.log(`practices/${PRACTICE_ID}/templates/${CROWN_PREP_TEMPLATE_ID} — written (v${CROWN_PREP_TEMPLATE.version})`);
 
   const versionRef = ref.collection("versions").doc(String(CROWN_PREP_TEMPLATE.version));
   await versionRef.set(docData);
@@ -138,7 +116,7 @@ async function seedCrownPrepTemplate(): Promise<void> {
 }
 
 async function seedGeneralTemplate(): Promise<void> {
-  const ref = db.doc(`practices/${TOY_PRACTICE_ID}/templates/${GENERAL_TEMPLATE_ID}`);
+  const ref = db.doc(`practices/${PRACTICE_ID}/templates/${GENERAL_TEMPLATE_ID}`);
 
   const docData = {
     ...GENERAL_TEMPLATE,
@@ -147,7 +125,7 @@ async function seedGeneralTemplate(): Promise<void> {
   };
 
   await ref.set(docData);
-  console.log(`practices/${TOY_PRACTICE_ID}/templates/${GENERAL_TEMPLATE_ID} — written (v${GENERAL_TEMPLATE.version})`);
+  console.log(`practices/${PRACTICE_ID}/templates/${GENERAL_TEMPLATE_ID} — written (v${GENERAL_TEMPLATE.version})`);
 
   const versionRef = ref.collection("versions").doc(String(GENERAL_TEMPLATE.version));
   await versionRef.set(docData);
@@ -155,7 +133,7 @@ async function seedGeneralTemplate(): Promise<void> {
 }
 
 async function seedProphylaxisTemplate(): Promise<void> {
-  const ref = db.doc(`practices/${TOY_PRACTICE_ID}/templates/${PROPHYLAXIS_TEMPLATE_ID}`);
+  const ref = db.doc(`practices/${PRACTICE_ID}/templates/${PROPHYLAXIS_TEMPLATE_ID}`);
 
   const docData = {
     ...PROPHYLAXIS_TEMPLATE,
@@ -164,7 +142,7 @@ async function seedProphylaxisTemplate(): Promise<void> {
   };
 
   await ref.set(docData);
-  console.log(`practices/${TOY_PRACTICE_ID}/templates/${PROPHYLAXIS_TEMPLATE_ID} — written (v${PROPHYLAXIS_TEMPLATE.version})`);
+  console.log(`practices/${PRACTICE_ID}/templates/${PROPHYLAXIS_TEMPLATE_ID} — written (v${PROPHYLAXIS_TEMPLATE.version})`);
 
   const versionRef = ref.collection("versions").doc(String(PROPHYLAXIS_TEMPLATE.version));
   await versionRef.set(docData);
@@ -172,7 +150,7 @@ async function seedProphylaxisTemplate(): Promise<void> {
 }
 
 async function seedNewPatientExamTemplate(): Promise<void> {
-  const ref = db.doc(`practices/${TOY_PRACTICE_ID}/templates/${NEW_PATIENT_EXAM_TEMPLATE_ID}`);
+  const ref = db.doc(`practices/${PRACTICE_ID}/templates/${NEW_PATIENT_EXAM_TEMPLATE_ID}`);
 
   const docData = {
     ...NEW_PATIENT_EXAM_TEMPLATE,
@@ -181,7 +159,7 @@ async function seedNewPatientExamTemplate(): Promise<void> {
   };
 
   await ref.set(docData);
-  console.log(`practices/${TOY_PRACTICE_ID}/templates/${NEW_PATIENT_EXAM_TEMPLATE_ID} — written (v${NEW_PATIENT_EXAM_TEMPLATE.version})`);
+  console.log(`practices/${PRACTICE_ID}/templates/${NEW_PATIENT_EXAM_TEMPLATE_ID} — written (v${NEW_PATIENT_EXAM_TEMPLATE.version})`);
 
   const versionRef = ref.collection("versions").doc(String(NEW_PATIENT_EXAM_TEMPLATE.version));
   await versionRef.set(docData);
@@ -189,7 +167,7 @@ async function seedNewPatientExamTemplate(): Promise<void> {
 }
 
 async function seedSoapTemplate(): Promise<void> {
-  const ref = db.doc(`practices/${TOY_PRACTICE_ID}/templates/${SOAP_TEMPLATE_ID}`);
+  const ref = db.doc(`practices/${PRACTICE_ID}/templates/${SOAP_TEMPLATE_ID}`);
 
   const docData = {
     ...SOAP_TEMPLATE,
@@ -198,7 +176,7 @@ async function seedSoapTemplate(): Promise<void> {
   };
 
   await ref.set(docData);
-  console.log(`practices/${TOY_PRACTICE_ID}/templates/${SOAP_TEMPLATE_ID} — written (v${SOAP_TEMPLATE.version})`);
+  console.log(`practices/${PRACTICE_ID}/templates/${SOAP_TEMPLATE_ID} — written (v${SOAP_TEMPLATE.version})`);
 
   const versionRef = ref.collection("versions").doc(String(SOAP_TEMPLATE.version));
   await versionRef.set(docData);
@@ -216,17 +194,16 @@ async function seedClinician(uid: string): Promise<void> {
     email: "(set on first sign-in)",
     display_name: "Anmol (dev)",
     role: "admin",
-    practice_id: TOY_PRACTICE_ID,
-    default_template_id: TOY_TEMPLATE_ID,
+    practice_id: PRACTICE_ID,
+    default_template_id: GENERAL_TEMPLATE_ID,
     created_at: FieldValue.serverTimestamp(),
   });
-  console.log(`clinicians/${uid} — created (role: admin, practice: ${TOY_PRACTICE_ID})`);
+  console.log(`clinicians/${uid} — created (role: admin, practice: ${PRACTICE_ID})`);
 }
 
 async function main(): Promise<void> {
   console.log(`Seeding project: ${projectId}\n`);
   await seedPractice();
-  await seedTemplate();
   await seedCementationTemplate();
   await seedCrownPrepTemplate();
   await seedGeneralTemplate();

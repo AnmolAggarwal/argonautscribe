@@ -17,7 +17,7 @@ import { createNote } from "../lib/notes";
  * or creates immediately if there's only one.
  */
 export function NotesList() {
-  const { user, clinician, signOut } = useAuth();
+  const { user, clinician, signOut, deleteAccount } = useAuth();
   const navigate = useNavigate();
   const [notes, setNotes] = useState<Note[]>([]);
   const [tags, setTags] = useState<Record<string, string>>({});
@@ -125,20 +125,42 @@ export function NotesList() {
             {clinician?.display_name ?? user?.email}
           </p>
         </div>
-        <button
-          onClick={() => void signOut()}
-          style={{
-            padding: "0.4rem 0.9rem",
-            fontSize: "0.8rem",
-            border: "1px solid #ddd",
-            borderRadius: 6,
-            background: "white",
-            color: "#666",
-            cursor: "pointer",
-          }}
-        >
-          Sign out
-        </button>
+        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+          <button
+            onClick={() => void signOut()}
+            style={{
+              padding: "0.4rem 0.9rem",
+              fontSize: "0.8rem",
+              border: "1px solid #ddd",
+              borderRadius: 6,
+              background: "white",
+              color: "#666",
+              cursor: "pointer",
+            }}
+          >
+            Sign out
+          </button>
+          <button
+            onClick={() => {
+              if (window.confirm("Delete your account? This permanently removes all notes, recordings, and data. This cannot be undone.")) {
+                void deleteAccount().catch((err) => {
+                  window.alert(`Delete failed: ${err instanceof Error ? err.message : String(err)}`);
+                });
+              }
+            }}
+            style={{
+              padding: "0.4rem 0.9rem",
+              fontSize: "0.8rem",
+              border: "1px solid #e53e3e",
+              borderRadius: 6,
+              background: "white",
+              color: "#e53e3e",
+              cursor: "pointer",
+            }}
+          >
+            Delete Account
+          </button>
+        </div>
       </header>
 
       {/* New Note button */}

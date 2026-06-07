@@ -14,6 +14,7 @@ struct ArgonautScribeApp: App {
         WindowGroup {
             RootView()
                 .environment(authService)
+                .tint(Theme.gold)
         }
     }
 }

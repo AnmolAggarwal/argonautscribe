@@ -23,3 +23,6 @@ export const DEFAULT_LLM_MODEL = "claude-sonnet-4-6";
 
 /** Default Deepgram model. SPEC §14.8. */
 export const DEFAULT_STT_MODEL = "nova-3-medical";
+
+/** The pilot practice's Firestore ID. */
+export const PRACTICE_ID = "argonaut-practice";

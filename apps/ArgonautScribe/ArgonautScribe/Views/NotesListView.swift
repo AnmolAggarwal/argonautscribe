@@ -9,6 +9,8 @@ struct NotesListView: View {
     @State private var templates: [Template] = []
     @State private var isCreating = false
     @State private var showTemplatePicker = false
+    @State private var showDeleteAccountAlert = false
+    @State private var isDeletingAccount = false
     @State private var listener: ListenerRegistration?
     @State private var tagListeners: [ListenerRegistration] = []
 
@@ -53,12 +55,19 @@ struct NotesListView: View {
             NoteWorkspaceView(noteId: noteId)
         }
         .navigationTitle("Argonaut Scribe")
+        .tint(Theme.gold)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
-                Button("Sign Out") {
-                    try? auth.signOut()
+                Menu {
+                    Button("Sign Out") {
+                        try? auth.signOut()
+                    }
+                    Button("Delete Account", role: .destructive) {
+                        showDeleteAccountAlert = true
+                    }
+                } label: {
+                    Image(systemName: "gearshape")
                 }
-                .font(.caption)
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
@@ -76,6 +85,22 @@ struct NotesListView: View {
                 }
             }
             Button("Cancel", role: .cancel) {}
+        }
+        .alert("Error", isPresented: .init(
+            get: { deleteError != nil },
+            set: { if !$0 { deleteError = nil } }
+        )) {
+            Button("OK") { deleteError = nil }
+        } message: {
+            Text(deleteError ?? "")
+        }
+        .alert("Delete Account?", isPresented: $showDeleteAccountAlert) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete Everything", role: .destructive) {
+                Task { await deleteAccount() }
+            }
+        } message: {
+            Text("This permanently deletes your account, all notes, recordings, and patient data. This cannot be undone.")
         }
         .task { await loadTemplates() }
         .onAppear { startListening() }
@@ -134,6 +159,23 @@ struct NotesListView: View {
         }
     }
 
+    @State private var deleteError: String?
+
+    private func deleteAccount() async {
+        isDeletingAccount = true
+        defer { isDeletingAccount = false }
+        do {
+            try await auth.deleteAccount()
+        } catch {
+            let msg = error.localizedDescription
+            if msg.contains("recent") || msg.contains("CREDENTIAL_TOO_OLD") {
+                deleteError = "Please sign out and sign back in, then try deleting again."
+            } else {
+                deleteError = "Delete failed: \(msg)"
+            }
+        }
+    }
+
     private func loadTemplates() async {
         guard let clinician = auth.clinician else { return }
         do {
@@ -188,9 +230,9 @@ struct StatusBadge: View {
     private var style: (Color, Color, String) {
         switch status {
         case "new":        return (.gray.opacity(0.15), .gray, "New")
-        case "generating": return (.blue.opacity(0.15), .blue, "Generating")
-        case "ready":      return (.green.opacity(0.15), .green, "Ready")
-        case "edited":     return (.yellow.opacity(0.15), .orange, "Edited")
+        case "generating": return (Theme.plum.opacity(0.15), Theme.plum, "Generating")
+        case "ready":      return (Theme.gold.opacity(0.15), Theme.gold, "Ready")
+        case "edited":     return (Theme.gold.opacity(0.15), Theme.gold, "Edited")
         case "error":      return (.red.opacity(0.15), .red, "Error")
         case "filed":      return (.gray.opacity(0.15), .gray, "Filed")
         default:           return (.gray.opacity(0.15), .gray, status.capitalized)

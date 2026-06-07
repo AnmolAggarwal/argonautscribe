@@ -14,6 +14,7 @@ struct RecordingControlsView: View {
     @State private var isUploading = false
     @State private var isGenerating = false
     @State private var permissionDenied = false
+    @State private var showReRecordAlert = false
 
     private var canGenerate: Bool {
         !segments.isEmpty
@@ -22,18 +23,47 @@ struct RecordingControlsView: View {
         && !isGenerating
     }
 
+    private var uploadedCount: Int {
+        segments.filter { $0.status == "uploaded" || $0.status == "done" }.count
+    }
+
+    private var micLabel: String {
+        if recorder.isRecording { return "Stop" }
+        return segments.isEmpty ? "Record" : "Record More"
+    }
+
+    @State private var isPulsing = false
+
     var body: some View {
         VStack(spacing: 12) {
-            // Mic button
+            // Mic button + label
             HStack(spacing: 16) {
                 Button {
                     Task { await toggleRecording() }
                 } label: {
-                    Image(systemName: recorder.isRecording ? "stop.circle.fill" : "mic.circle.fill")
-                        .font(.system(size: 48))
-                        .foregroundStyle(recorder.isRecording ? .red : .blue)
+                    VStack(spacing: 4) {
+                        ZStack {
+                            if recorder.isRecording {
+                                Circle()
+                                    .fill(Color.red.opacity(0.2))
+                                    .frame(width: 64, height: 64)
+                                    .scaleEffect(isPulsing ? 1.3 : 1.0)
+                                    .opacity(isPulsing ? 0 : 0.6)
+                                    .animation(.easeInOut(duration: 1.0).repeatForever(autoreverses: false), value: isPulsing)
+                            }
+                            Image(systemName: recorder.isRecording ? "stop.circle.fill" : "mic.circle.fill")
+                                .font(.system(size: 48))
+                                .foregroundStyle(recorder.isRecording ? .red : Theme.gold)
+                        }
+                        Text(micLabel)
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(recorder.isRecording ? .red : Theme.gold)
+                    }
                 }
                 .disabled(isUploading)
+                .onChange(of: recorder.isRecording) { _, recording in
+                    isPulsing = recording
+                }
 
                 if recorder.isRecording {
                     Text(formatDuration(recorder.duration))
@@ -43,6 +73,20 @@ struct RecordingControlsView: View {
 
                 Spacer()
 
+                // Recording count + re-record
+                if !segments.isEmpty && !recorder.isRecording {
+                    VStack(spacing: 4) {
+                        Text("\(uploadedCount) recording\(uploadedCount == 1 ? "" : "s")")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Button("Re-record") {
+                            showReRecordAlert = true
+                        }
+                        .font(.caption2)
+                        .foregroundStyle(.red)
+                    }
+                }
+
                 // Generate button
                 if canGenerate {
                     Button {
@@ -50,11 +94,13 @@ struct RecordingControlsView: View {
                     } label: {
                         if isGenerating {
                             ProgressView()
+                                .tint(.white)
                         } else {
                             Label("Generate", systemImage: "sparkles")
                         }
                     }
                     .buttonStyle(.borderedProminent)
+                    .tint(Theme.plum)
                     .disabled(isGenerating)
                 }
 
@@ -77,28 +123,9 @@ struct RecordingControlsView: View {
             if isUploading {
                 HStack(spacing: 6) {
                     ProgressView()
-                    Text("Uploading...")
+                    Text("Uploading audio...")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                }
-            }
-
-            // Segment list
-            if !segments.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Segments")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                    ForEach(segments) { seg in
-                        HStack {
-                            Text("Segment \(seg.sequence + 1)")
-                                .font(.caption)
-                            Spacer()
-                            Text(seg.status)
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
                 }
             }
         }
@@ -106,6 +133,14 @@ struct RecordingControlsView: View {
         .background(.gray.opacity(0.05), in: RoundedRectangle(cornerRadius: 12))
         .onAppear { startListening() }
         .onDisappear { segmentListener?.remove() }
+        .alert("Re-record?", isPresented: $showReRecordAlert) {
+            Button("Cancel", role: .cancel) {}
+            Button("Discard & Re-record", role: .destructive) {
+                Task { await reRecord() }
+            }
+        } message: {
+            Text("This deletes all recordings and generated notes. You'll start fresh.")
+        }
     }
 
     // MARK: - Recording
@@ -147,7 +182,8 @@ struct RecordingControlsView: View {
             let storagePath = try await StorageService.uploadSegment(
                 noteId: noteId,
                 segmentId: segmentId,
-                fileURL: fileURL
+                fileURL: fileURL,
+                clinicianUid: uid
             )
 
             // Mark uploaded.
@@ -171,6 +207,17 @@ struct RecordingControlsView: View {
             try await FirestoreService.generateNote(noteId: noteId)
         } catch {
             print("Generate failed: \(error.localizedDescription)")
+        }
+    }
+
+    // MARK: - Re-record
+
+    private func reRecord() async {
+        guard let uid = auth.user?.uid else { return }
+        do {
+            try await FirestoreService.deleteAllSegments(clinicianUid: uid, noteId: noteId)
+        } catch {
+            print("Re-record failed: \(error.localizedDescription)")
         }
     }
 

@@ -130,6 +130,22 @@ enum FirestoreService {
         ])
     }
 
+    static func deleteAllSegments(clinicianUid: String, noteId: String) async throws {
+        let col = segmentsCollection(clinicianUid: clinicianUid, noteId: noteId)
+        let snap = try await col.getDocuments()
+        for doc in snap.documents {
+            try await doc.reference.delete()
+        }
+        // Reset note status back to "new" and clear transcript
+        try await noteRef(clinicianUid: clinicianUid, noteId: noteId).updateData([
+            "status": "new",
+            "transcript": NSNull(),
+            "field_values": [String: Any](),
+            "final_note_text": NSNull(),
+            "updated_at": FirebaseFirestore.FieldValue.serverTimestamp(),
+        ])
+    }
+
     // MARK: - Generate (Cloud Function)
 
     static func generateNote(noteId: String) async throws {
